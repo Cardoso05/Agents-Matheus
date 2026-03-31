@@ -179,8 +179,7 @@ def page_dashboard(request: Request):
     except Exception:
         metricas = {"total_interacoes": 0, "custo_total": 0}
 
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "dashboard.html", {
         "status": status,
         "top5": top3,
         "atrasadas": atr,
@@ -192,8 +191,7 @@ def page_dashboard(request: Request):
 @app.get("/pendencias", response_class=HTMLResponse)
 def page_pendencias(request: Request, projeto: str | None = None, status: str | None = None):
     pendencias = models.listar_pendencias(projeto=projeto, status=status or "pendente")
-    return templates.TemplateResponse("pendencias.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "pendencias.html", {
         "pendencias": pendencias,
         "projeto_filtro": projeto,
         "status_filtro": status or "pendente",
@@ -204,8 +202,7 @@ def page_pendencias(request: Request, projeto: str | None = None, status: str | 
 @app.get("/calendario", response_class=HTMLResponse)
 def page_calendario(request: Request):
     eventos = calendar.eventos_da_semana()
-    return templates.TemplateResponse("calendario.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "calendario.html", {
         "eventos": eventos,
     })
 
@@ -213,8 +210,7 @@ def page_calendario(request: Request):
 @app.get("/jobs", response_class=HTMLResponse)
 def page_jobs(request: Request):
     jobs = jobs_db.listar_jobs()
-    return templates.TemplateResponse("jobs.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "jobs.html", {
         "jobs": jobs,
     })
 
@@ -223,8 +219,7 @@ def page_jobs(request: Request):
 def page_metricas(request: Request):
     metricas = metricas_periodo(dias=7)
     custos = custo_periodo(dias=30)
-    return templates.TemplateResponse("metricas.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "metricas.html", {
         "metricas": metricas,
         "custos": custos,
     })
