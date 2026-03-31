@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cerebro"
+version = "0.1.0"
+description = "Cérebro: Sistema de gestão com agente único + workers autônomos"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.40.0",
+    "python-dotenv>=1.0.0",
+    "apscheduler>=3.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+telegram = [
+    "python-telegram-bot>=21.0",
+]
+
+[project.scripts]
+cerebro = "cerebro.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["cerebro/evals"]
+pythonpath = ["."]
