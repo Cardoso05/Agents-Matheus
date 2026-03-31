@@ -122,4 +122,17 @@ CREATE TABLE IF NOT EXISTS jobs (
     custo_tokens    INTEGER,
     notificar       TEXT DEFAULT 'telegram'
 );
+
+-- Calendário (eventos)
+CREATE TABLE IF NOT EXISTS eventos (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    titulo          TEXT NOT NULL,
+    data            DATE NOT NULL,
+    hora            TEXT,
+    duracao_minutos INTEGER DEFAULT 60,
+    projeto         TEXT,
+    notas           TEXT,
+    google_event_id TEXT,
+    criado_em       DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 """

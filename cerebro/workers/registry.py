@@ -22,7 +22,10 @@ def get_worker(tipo: str) -> BaseWorker | None:
 
 def _register_all():
     """Importa todos os tipos de worker para que se registrem."""
-    from cerebro.workers.types import revisao_codigo, pesquisa, geracao_conteudo, relatorio  # noqa: F401
+    from cerebro.workers.types import (  # noqa: F401
+        revisao_codigo, pesquisa, geracao_conteudo, relatorio,
+        auditoria, analise_dados,
+    )
 
 
 # Auto-register ao importar

@@ -6,6 +6,7 @@ import anthropic
 
 from cerebro.core.config import MODEL, SKILLS_DIR
 from cerebro.db import models, jobs as jobs_db
+from cerebro.integrations import calendar, web_search
 
 # ── System Prompt Base ──────────────────────────────────────
 
@@ -36,12 +37,20 @@ TOOLS DISPONÍVEIS:
 - cobrar_delegacao: gerar cobrança de delegação
 - registrar_decisao: registrar decisão tomada
 - consultar_decisoes: ver decisões passadas
+- registrar_fato: registrar fato/informação sobre um projeto
+- listar_stakeholders: ver pessoas envolvidas em um projeto
 - criar_job: criar job de background (APENAS para trabalho longo/complexo)
+- consultar_jobs: ver status dos jobs de background
+- criar_evento_calendar: agendar evento no calendário
+- listar_eventos_calendar: ver agenda do dia/semana
+- buscar_web: pesquisar na internet
+- ler_arquivo: ler conteúdo de um arquivo
 
 IMPORTANTE:
 - Nunca invente dados. Se não tem informação, pergunte.
 - Não conclua tarefas sem confirmação explícita do Matheus.
 - Jobs de background são para trabalho real (revisão, pesquisa, relatório), NÃO para consultas simples.
+- Use buscar_web para pesquisas rápidas. Para pesquisas complexas, crie um job de pesquisa.
 """
 
 # ── Tool Definitions ────────────────────────────────────────
@@ -194,6 +203,109 @@ TOOLS = [
             "required": ["tipo", "instrucoes"],
         },
     },
+    {
+        "name": "consultar_jobs",
+        "description": "Consulta status dos jobs de background.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "description": "Filtrar por status: pendente, executando, concluido, erro",
+                },
+                "projeto": {"type": "string", "description": "Filtrar por projeto"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "registrar_fato",
+        "description": "Registra um fato/informação permanente sobre um projeto na memória.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "projeto": {"type": "string", "description": "Slug do projeto"},
+                "categoria": {
+                    "type": "string",
+                    "description": "Categoria: sobre, regra, meta, restricao",
+                },
+                "fato": {"type": "string", "description": "O fato a registrar"},
+            },
+            "required": ["projeto", "fato"],
+        },
+    },
+    {
+        "name": "listar_stakeholders",
+        "description": "Lista pessoas/stakeholders envolvidos em um projeto.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "projeto": {"type": "string", "description": "Slug do projeto"},
+            },
+            "required": ["projeto"],
+        },
+    },
+    {
+        "name": "criar_evento_calendar",
+        "description": "Cria um evento no calendário.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "titulo": {"type": "string", "description": "Título do evento"},
+                "data": {"type": "string", "description": "Data no formato YYYY-MM-DD"},
+                "hora": {"type": "string", "description": "Hora no formato HH:MM. Opcional."},
+                "duracao_minutos": {
+                    "type": "integer",
+                    "description": "Duração em minutos. Default: 60",
+                },
+                "projeto": {"type": "string", "description": "Projeto relacionado. Opcional."},
+                "notas": {"type": "string", "description": "Notas adicionais. Opcional."},
+            },
+            "required": ["titulo", "data"],
+        },
+    },
+    {
+        "name": "listar_eventos_calendar",
+        "description": "Lista eventos do calendário. Sem parâmetros retorna eventos de hoje.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "data_inicio": {"type": "string", "description": "Data início (YYYY-MM-DD)"},
+                "data_fim": {"type": "string", "description": "Data fim (YYYY-MM-DD)"},
+                "semana": {
+                    "type": "boolean",
+                    "description": "Se true, retorna eventos da semana inteira",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "buscar_web",
+        "description": "Pesquisa na internet. Use para consultas rápidas de informação.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Termo de busca"},
+                "num_results": {
+                    "type": "integer",
+                    "description": "Número de resultados. Default: 5",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "ler_arquivo",
+        "description": "Lê o conteúdo de um arquivo do sistema de arquivos.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Caminho do arquivo"},
+            },
+            "required": ["path"],
+        },
+    },
 ]
 
 
@@ -281,6 +393,78 @@ def _handle_criar_job(tipo, instrucoes, projeto=None, escopo=None, tools_permiti
     return f"🔄 Job #{result['id']} criado ({tipo}). Te aviso quando terminar."
 
 
+def _handle_consultar_jobs(status=None, projeto=None, **_):
+    jobs = jobs_db.listar_jobs(status=status, projeto=projeto)
+    if not jobs:
+        return "Nenhum job encontrado."
+    lines = []
+    for j in jobs:
+        emoji = {"pendente": "⏳", "executando": "🔄", "concluido": "✅", "erro": "❌"}.get(j["status"], "❓")
+        proj = f" [{j['projeto'].upper()}]" if j.get("projeto") else ""
+        lines.append(f"{emoji} #{j['id']} ({j['tipo']}){proj} — {j['status']}")
+        if j["status"] == "concluido" and j.get("resultado"):
+            resumo = j["resultado"][:200]
+            lines.append(f"   {resumo}{'...' if len(j['resultado']) > 200 else ''}")
+        if j["status"] == "erro" and j.get("erro"):
+            lines.append(f"   Erro: {j['erro'][:200]}")
+    return "\n".join(lines)
+
+
+def _handle_registrar_fato(projeto, fato, categoria="sobre", **_):
+    models.registrar_fato(projeto=projeto, categoria=categoria, fato=fato)
+    return f"✅ Fato registrado para {projeto.upper()}: {fato}"
+
+
+def _handle_listar_stakeholders(projeto, **_):
+    stakeholders = models.listar_stakeholders(projeto)
+    if not stakeholders:
+        return f"Nenhum stakeholder registrado para {projeto.upper()}."
+    lines = []
+    for s in stakeholders:
+        contato = f" ({s['contato']})" if s.get("contato") else ""
+        notas = f" — {s['notas']}" if s.get("notas") else ""
+        lines.append(f"• **{s['nome']}** [{s['papel']}]{contato}{notas}")
+    return "\n".join(lines)
+
+
+def _handle_criar_evento_calendar(titulo, data, hora=None, duracao_minutos=60, projeto=None, notas=None, **_):
+    evento = calendar.criar_evento(
+        titulo=titulo, data=data, hora=hora,
+        duracao_minutos=duracao_minutos, projeto=projeto, notas=notas,
+    )
+    hora_str = f" às {hora}" if hora else ""
+    return f"📅 Evento #{evento['id']} criado: {titulo} em {data}{hora_str}"
+
+
+def _handle_listar_eventos_calendar(data_inicio=None, data_fim=None, semana=False, **_):
+    if semana:
+        eventos = calendar.eventos_da_semana()
+    elif data_inicio:
+        eventos = calendar.listar_eventos(data_inicio=data_inicio, data_fim=data_fim)
+    else:
+        eventos = calendar.eventos_do_dia()
+    return calendar.formatar_eventos(eventos)
+
+
+def _handle_buscar_web(query, num_results=5, **_):
+    return web_search.buscar_web(query, num_results=num_results)
+
+
+def _handle_ler_arquivo(path, **_):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        if len(content) > 50000:
+            content = content[:50000] + "\n\n... (arquivo truncado)"
+        return content
+    except FileNotFoundError:
+        return f"❌ Arquivo não encontrado: {path}"
+    except UnicodeDecodeError:
+        return f"❌ Arquivo não é texto: {path}"
+    except Exception as e:
+        return f"❌ Erro ao ler arquivo: {e}"
+
+
 TOOL_HANDLERS = {
     "criar_pendencia": _handle_criar_pendencia,
     "concluir_pendencia": _handle_concluir_pendencia,
@@ -290,7 +474,14 @@ TOOL_HANDLERS = {
     "cobrar_delegacao": _handle_cobrar_delegacao,
     "registrar_decisao": _handle_registrar_decisao,
     "consultar_decisoes": _handle_consultar_decisoes,
+    "registrar_fato": _handle_registrar_fato,
+    "listar_stakeholders": _handle_listar_stakeholders,
     "criar_job": _handle_criar_job,
+    "consultar_jobs": _handle_consultar_jobs,
+    "criar_evento_calendar": _handle_criar_evento_calendar,
+    "listar_eventos_calendar": _handle_listar_eventos_calendar,
+    "buscar_web": _handle_buscar_web,
+    "ler_arquivo": _handle_ler_arquivo,
 }
 
 
