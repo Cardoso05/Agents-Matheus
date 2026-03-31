@@ -86,6 +86,8 @@ def main():
     parser.add_argument("--atrasadas", action="store_true", help="Mostrar atrasadas")
     parser.add_argument("--semanal", action="store_true", help="Mostrar review semanal")
     parser.add_argument("--init-db", action="store_true", help="Inicializar banco de dados")
+    parser.add_argument("--telegram", action="store_true", help="Iniciar bot Telegram")
+    parser.add_argument("--process-jobs", action="store_true", help="Processar jobs pendentes")
 
     args = parser.parse_args()
 
@@ -118,8 +120,50 @@ def main():
         print(resumo_semanal())
         return
 
+    if args.telegram:
+        _run_telegram()
+        return
+
+    if args.process_jobs:
+        from cerebro.workers.runner import processar_proximo_job
+        processou = processar_proximo_job()
+        if processou:
+            print("✅ Job processado.")
+        else:
+            print("Nenhum job pendente na fila.")
+        return
+
     # Modo interativo
     cli_loop()
+
+
+def _run_telegram():
+    """Inicia o bot Telegram com scheduler integrado."""
+    import asyncio
+    import logging
+
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        level=logging.INFO,
+    )
+
+    from cerebro.interfaces.telegram_bot import create_app, enviar_mensagem_proativa
+    from cerebro.core.scheduler import criar_scheduler, set_notificar_callback
+
+    app = create_app()
+
+    # Conectar scheduler ao Telegram
+    async def notificar_via_telegram(texto: str):
+        await enviar_mensagem_proativa(app, texto)
+
+    set_notificar_callback(notificar_via_telegram)
+
+    # Iniciar scheduler junto com o bot
+    scheduler = criar_scheduler()
+    scheduler.start()
+
+    print("🧠 Cérebro Bot + Scheduler iniciados!")
+    app.run_polling()
 
 
 if __name__ == "__main__":
