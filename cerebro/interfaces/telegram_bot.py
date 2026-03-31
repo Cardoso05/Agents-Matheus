@@ -142,32 +142,42 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 
+async def _safe_reply(message, text: str):
+    """Envia mensagem com Markdown, fallback pra texto plano se falhar."""
+    chunks = [text[i:i + 4096] for i in range(0, len(text), 4096)]
+    for chunk in chunks:
+        try:
+            await message.reply_text(chunk, parse_mode="Markdown")
+        except Exception:
+            await message.reply_text(chunk)
+
+
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler do /status."""
     if not _is_authorized(update.effective_user.id):
         return
-    await update.message.reply_text(status_geral(), parse_mode="Markdown")
+    await _safe_reply(update.message, status_geral())
 
 
 async def cmd_top3(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler do /top3."""
     if not _is_authorized(update.effective_user.id):
         return
-    await update.message.reply_text(top_n_do_dia(), parse_mode="Markdown")
+    await _safe_reply(update.message, top_n_do_dia())
 
 
 async def cmd_atrasadas(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler do /atrasadas."""
     if not _is_authorized(update.effective_user.id):
         return
-    await update.message.reply_text(atrasadas(), parse_mode="Markdown")
+    await _safe_reply(update.message, atrasadas())
 
 
 async def cmd_semanal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler do /semanal."""
     if not _is_authorized(update.effective_user.id):
         return
-    await update.message.reply_text(resumo_semanal(), parse_mode="Markdown")
+    await _safe_reply(update.message, resumo_semanal())
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -185,13 +195,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     response = await _processar_mensagem(texto, user_id=update.effective_user.id)
 
-    # Telegram tem limite de 4096 chars por mensagem
-    if len(response) <= 4096:
-        await update.message.reply_text(response, parse_mode="Markdown")
-    else:
-        # Divide em chunks
-        for i in range(0, len(response), 4096):
-            await update.message.reply_text(response[i:i + 4096], parse_mode="Markdown")
+    await _safe_reply(update.message, response)
 
 
 async def handle_error(update: object, context: ContextTypes.DEFAULT_TYPE):
