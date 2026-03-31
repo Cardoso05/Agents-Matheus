@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Financeiro{% endblock %}
+{% block content %}
+<h2>💰 Financeiro — {{ mes_label }}</h2>
+
+<!-- Cards resumo -->
+<div class="grid-cards">
+    <div class="card">
+        <h3>📈 Entradas</h3>
+        <div class="value ok">R${{ "%.2f"|format(resumo.entradas) }}</div>
+    </div>
+    <div class="card">
+        <h3>📉 Saídas</h3>
+        <div class="value">R${{ "%.2f"|format(resumo.saidas) }}</div>
+    </div>
+    <div class="card">
+        <h3>{{ "🟢" if resumo.saldo >= 0 else "🚨" }} Saldo</h3>
+        <div class="value {{ 'ok' if resumo.saldo >= 0 else 'atrasada' }}">R${{ "%.2f"|format(resumo.saldo) }}</div>
+    </div>
+    <div class="card">
+        <h3>⚠️ A pagar (7d)</h3>
+        <div class="value">R${{ "%.2f"|format(resumo.a_pagar_7d) }}</div>
+    </div>
+    <div class="card">
+        <h3>💰 A receber</h3>
+        <div class="value ok">R${{ "%.2f"|format(resumo.a_receber) }}</div>
+    </div>
+</div>
+
+<!-- Gastos por categoria -->
+{% if categorias_gastos %}
+<h3>Gastos por Categoria</h3>
+<table>
+    <thead>
+        <tr><th>Categoria</th><th>Total</th><th>%</th><th>Qtd</th></tr>
+    </thead>
+    <tbody>
+        {% for c in categorias_gastos %}
+        <tr>
+            <td>{{ c.emoji }} {{ c.categoria }}</td>
+            <td>R${{ "%.2f"|format(c.total) }}</td>
+            <td>{{ "%.0f"|format(c.pct) }}%</td>
+            <td>{{ c.qtd }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<!-- Formulário novo lançamento -->
+<details>
+    <summary><strong>+ Novo Lançamento</strong></summary>
+    <form class="form-inline" id="form-lancamento" onsubmit="criarLancamento(event)">
+        <div class="form-group">
+            <label>Tipo</label>
+            <select name="tipo">
+                <option value="saida">Saída</option>
+                <option value="entrada">Entrada</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Valor (R$)</label>
+            <input type="number" name="valor" step="0.01" min="0.01" required>
+        </div>
+        <div class="form-group form-group-wide">
+            <label>Descrição</label>
+            <input type="text" name="descricao" required placeholder="Ex: almoço, material intelbras...">
+        </div>
+        <div class="form-group">
+            <label>Categoria</label>
+            <select name="categoria">
+                <option value="alimentacao">🍔 Alimentação</option>
+                <option value="transporte">🚗 Transporte</option>
+                <option value="material">🔧 Material</option>
+                <option value="servico">👷 Serviço</option>
+                <option value="infra">💻 Infra</option>
+                <option value="marketing">📢 Marketing</option>
+                <option value="assinatura">📦 Assinatura</option>
+                <option value="educacao">📚 Educação</option>
+                <option value="saude">💊 Saúde</option>
+                <option value="projeto_receita">💰 Receita Projeto</option>
+                <option value="servico_receita">🏗️ Receita Serviço</option>
+                <option value="outros">📝 Outros</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Projeto</label>
+            <select name="projeto">
+                <option value="pessoal">Pessoal</option>
+                {% for slug, info in projetos.items() %}
+                <option value="{{ slug }}">{{ info.emoji }} {{ info.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Data</label>
+            <input type="date" name="data">
+        </div>
+        <div class="form-group">
+            <button type="submit">Registrar</button>
+        </div>
+    </form>
+</details>
+
+<!-- Últimos lançamentos -->
+<h3>Últimos Lançamentos</h3>
+{% if lancamentos %}
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Data</th>
+            <th>Tipo</th>
+            <th>Valor</th>
+            <th>Descrição</th>
+            <th>Categoria</th>
+            <th>Projeto</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for l in lancamentos %}
+        <tr>
+            <td>{{ l.id }}</td>
+            <td>{{ l.data }}</td>
+            <td>{{ "📈" if l.tipo == "entrada" else "📉" }}</td>
+            <td>R${{ "%.2f"|format(l.valor) }}</td>
+            <td>{{ l.descricao }}</td>
+            <td>{{ l.categoria }}</td>
+            <td>{{ l.projeto | upper }}</td>
+            <td>
+                <button class="btn-excluir" onclick="excluirLancamento({{ l.id }})">✕</button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>Nenhum lançamento registrado.</p>
+{% endif %}
+
+<script>
+function criarLancamento(e) {
+    e.preventDefault();
+    var form = e.target;
+    var data = {
+        tipo: form.tipo.value,
+        valor: parseFloat(form.valor.value),
+        descricao: form.descricao.value,
+        categoria: form.categoria.value,
+        projeto: form.projeto.value,
+        data: form.data.value || null
+    };
+    fetch('/api/lancamentos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    }).then(r => r.json()).then(() => location.reload());
+}
+
+function excluirLancamento(id) {
+    if (!confirm('Excluir lançamento #' + id + '?')) return;
+    fetch('/api/lancamentos/' + id, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(() => location.reload());
+}
+</script>
+{% endblock %}

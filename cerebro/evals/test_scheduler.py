@@ -26,5 +26,5 @@ class TestSchedulerSetup:
 
     def test_total_de_jobs(self):
         scheduler = criar_scheduler()
-        # 8 jobs definidos
-        assert len(scheduler.get_jobs()) == 8
+        # 11 jobs definidos (8 originais + 3 financeiros)
+        assert len(scheduler.get_jobs()) == 11

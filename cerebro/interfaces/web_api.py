@@ -12,6 +12,7 @@ from cerebro.db.setup import init_db
 from cerebro.db import models, jobs as jobs_db
 from cerebro.db.metricas import metricas_periodo, custo_periodo, erros_recentes
 from cerebro.db.conversas import historico_sessao
+from cerebro.db import models_finance
 from cerebro.integrations import calendar
 from cerebro.core.config import PROJETOS
 from cerebro.core.deterministic import (
@@ -56,6 +57,26 @@ class NovoJob(BaseModel):
     instrucoes: str
     projeto: str | None = None
     escopo: dict | None = None
+
+
+class NovoLancamento(BaseModel):
+    tipo: str
+    valor: float
+    descricao: str
+    categoria: str
+    projeto: str = "pessoal"
+    data: str | None = None
+
+
+class NovoCompromisso(BaseModel):
+    tipo: str
+    descricao: str
+    valor: float
+    vencimento: str
+    projeto: str = "pessoal"
+    credor: str | None = None
+    parcela_atual: int | None = None
+    parcela_total: int | None = None
 
 
 class Mensagem(BaseModel):
@@ -187,6 +208,55 @@ def api_custos(dias: int = 30):
     return custo_periodo(dias=dias)
 
 
+# ── Finance API ─────────────────────────────────────────────
+
+
+@app.get("/api/lancamentos")
+def api_lancamentos(
+    projeto: str | None = None,
+    categoria: str | None = None,
+    tipo: str | None = None,
+    mes: str | None = None,
+):
+    return models_finance.listar_lancamentos(
+        projeto=projeto, categoria=categoria, tipo=tipo, mes=mes,
+    )
+
+
+@app.post("/api/lancamentos")
+def api_criar_lancamento(l: NovoLancamento):
+    return models_finance.criar_lancamento(
+        tipo=l.tipo, valor=l.valor, descricao=l.descricao,
+        categoria=l.categoria, projeto=l.projeto, data=l.data,
+    )
+
+
+@app.delete("/api/lancamentos/{id}")
+def api_deletar_lancamento(id: int):
+    ok = models_finance.deletar_lancamento(id)
+    if not ok:
+        return {"error": "Lançamento não encontrado"}
+    return {"ok": True, "id": id}
+
+
+@app.get("/api/compromissos")
+def api_compromissos(
+    tipo: str | None = None,
+    status: str | None = None,
+    projeto: str | None = None,
+):
+    return models_finance.listar_compromissos(tipo=tipo, status=status, projeto=projeto)
+
+
+@app.post("/api/compromissos")
+def api_criar_compromisso(c: NovoCompromisso):
+    return models_finance.criar_compromisso(
+        tipo=c.tipo, descricao=c.descricao, valor=c.valor,
+        vencimento=c.vencimento, projeto=c.projeto, credor=c.credor,
+        parcela_atual=c.parcela_atual, parcela_total=c.parcela_total,
+    )
+
+
 @app.post("/api/mensagem")
 def api_mensagem(m: Mensagem):
     from cerebro.main import processar_mensagem
@@ -252,6 +322,85 @@ def page_jobs(request: Request):
     jobs = jobs_db.listar_jobs()
     return templates.TemplateResponse(request, "jobs.html", {
         "jobs": jobs,
+        "projetos": PROJETOS,
+    })
+
+
+@app.get("/financeiro", response_class=HTMLResponse)
+def page_financeiro(request: Request, mes: str | None = None):
+    from datetime import datetime as dt
+    if mes is None:
+        mes = dt.now().strftime("%Y-%m")
+    mes_label = dt.strptime(mes, "%Y-%m").strftime("%B %Y").capitalize()
+
+    # Resumo do mês
+    from cerebro.db.setup import get_connection
+    conn = get_connection()
+    row = conn.execute(
+        """SELECT
+            COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN valor ELSE 0 END), 0) as entradas,
+            COALESCE(SUM(CASE WHEN tipo = 'saida' THEN valor ELSE 0 END), 0) as saidas
+           FROM lancamentos
+           WHERE strftime('%Y-%m', data) = ? AND status != 'cancelado'""",
+        (mes,),
+    ).fetchone()
+    entradas = row["entradas"]
+    saidas = row["saidas"]
+
+    # A pagar 7d
+    a_pagar_row = conn.execute(
+        """SELECT COALESCE(SUM(valor), 0) as total FROM compromissos
+           WHERE tipo = 'pagar' AND status IN ('aberto', 'vencido')
+             AND vencimento BETWEEN date('now') AND date('now', '+7 days')"""
+    ).fetchone()
+
+    # A receber
+    a_receber_row = conn.execute(
+        """SELECT COALESCE(SUM(valor), 0) as total FROM compromissos
+           WHERE tipo = 'receber' AND status = 'aberto'"""
+    ).fetchone()
+
+    resumo = {
+        "entradas": entradas,
+        "saidas": saidas,
+        "saldo": entradas - saidas,
+        "a_pagar_7d": a_pagar_row["total"],
+        "a_receber": a_receber_row["total"],
+    }
+
+    # Gastos por categoria
+    cat_rows = conn.execute(
+        """SELECT categoria, SUM(valor) as total, COUNT(*) as qtd
+           FROM lancamentos
+           WHERE tipo = 'saida' AND strftime('%Y-%m', data) = ? AND status != 'cancelado'
+           GROUP BY categoria ORDER BY total DESC""",
+        (mes,),
+    ).fetchall()
+
+    emojis = {
+        "alimentacao": "🍔", "transporte": "🚗", "material": "🔧",
+        "servico": "👷", "infra": "💻", "marketing": "📢",
+        "assinatura": "📦", "educacao": "📚", "saude": "💊",
+        "projeto_receita": "💰", "servico_receita": "🏗️", "outros": "📝",
+    }
+    categorias_gastos = []
+    for c in cat_rows:
+        categorias_gastos.append({
+            "categoria": c["categoria"],
+            "emoji": emojis.get(c["categoria"], "📝"),
+            "total": c["total"],
+            "pct": (c["total"] / saidas * 100) if saidas > 0 else 0,
+            "qtd": c["qtd"],
+        })
+
+    # Últimos lançamentos
+    lancamentos = models_finance.listar_lancamentos(mes=mes, limite=30)
+
+    return templates.TemplateResponse(request, "financeiro.html", {
+        "mes_label": mes_label,
+        "resumo": resumo,
+        "categorias_gastos": categorias_gastos,
+        "lancamentos": lancamentos,
         "projetos": PROJETOS,
     })
 

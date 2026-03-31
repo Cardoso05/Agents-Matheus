@@ -110,7 +110,34 @@ def classificar(mensagem: str) -> dict:
         logger.info("MSG=%s → handler=%s func=%s", msg[:80], result["handler"], result.get("func"))
         return result
 
-    # 1. Status geral
+    # 1. Resumo financeiro (antes de status_geral para evitar conflito com "resumo")
+    if _is_simple_query(msg) and _match(msg, [
+        "resumo financeiro", "finanças", "financas", "financeiro",
+        "quanto gastei", "gastos do mês", "gastos do mes",
+        "quanto entrou", "saldo do mês", "saldo do mes",
+        "balanço", "balanco",
+    ]):
+        result = {"handler": "deterministic", "func": "resumo_financeiro"}
+        logger.info("MSG=%s → handler=%s func=%s", msg[:80], result["handler"], result.get("func"))
+        return result
+
+    # 1b. Contas vencidas (antes de atrasadas para evitar conflito com "vencid")
+    if _match(msg, ["conta vencida", "contas vencidas", "inadimplente"]):
+        result = {"handler": "deterministic", "func": "contas_vencidas"}
+        logger.info("MSG=%s → handler=%s func=%s", msg[:80], result["handler"], result.get("func"))
+        return result
+
+    # 1c. Contas a pagar / vencendo
+    if _match(msg, [
+        "contas a pagar", "tenho que pagar", "preciso pagar",
+        "contas vencendo", "vence amanhã", "vence amanha",
+        "boleto", "conta de",
+    ]):
+        result = {"handler": "deterministic", "func": "contas_vencendo"}
+        logger.info("MSG=%s → handler=%s func=%s", msg[:80], result["handler"], result.get("func"))
+        return result
+
+    # 2. Status geral
     if _match(msg, [
         "status geral", "resumo geral", "como tá tudo", "como ta tudo",
         "como tão as coisas", "como tao as coisas", "como estão as coisas",
@@ -194,16 +221,49 @@ def classificar(mensagem: str) -> dict:
         logger.info("MSG=%s → handler=%s func=%s", msg[:80], result["handler"], result.get("func"))
         return result
 
-    # 9. Consulta simples de projeto
+    # 9. Gasto rápido: "gastei 45 no almoço", "paguei 350 de internet"
+    gasto_match = re.search(
+        r"(?:gastei|paguei|comprei)\s+(?:r?\$\s*)?(\d+(?:[.,]\d{1,2})?)\s+(?:no?|em|de|com|na|pro|pra|reais)?\s*(.*)",
+        msg_lower,
+    )
+    if gasto_match:
+        valor_str = gasto_match.group(1).replace(",", ".")
+        descricao = gasto_match.group(2).strip().rstrip(".")
+        if descricao:
+            result = {
+                "handler": "deterministic",
+                "func": "registrar_gasto",
+                "args": {"valor": float(valor_str), "descricao": descricao},
+            }
+            logger.info("MSG=%s → handler=%s func=%s valor=%.2f", msg[:80], result["handler"], result.get("func"), float(valor_str))
+            return result
+
+    # 10. Receita rápida: "recebi 700 da gruta", "entrou 100 do erp"
+    receita_match = re.search(
+        r"(?:recebi|entrou|veio)\s+(?:r?\$\s*)?(\d+(?:[.,]\d{1,2})?)\s+(?:da|do|de|d[oa]s?)?\s*(.*)",
+        msg_lower,
+    )
+    if receita_match:
+        valor_str = receita_match.group(1).replace(",", ".")
+        descricao = receita_match.group(2).strip().rstrip(".")
+        if descricao:
+            result = {
+                "handler": "deterministic",
+                "func": "registrar_receita",
+                "args": {"valor": float(valor_str), "descricao": descricao},
+            }
+            logger.info("MSG=%s → handler=%s func=%s valor=%.2f", msg[:80], result["handler"], result.get("func"), float(valor_str))
+            return result
+
+    # 14. Consulta simples de projeto
     projeto = detectar_projeto(msg)
     if projeto and _is_simple_query(msg):
-        # Queries como "pendências da WIPR", "como tá o ERP", "status da engenharia"
         if _match(msg, ["pendência", "pendencia", "como tá", "como ta", "status", "como está", "como esta"]):
             result = {"handler": "deterministic", "func": "pendencias_projeto", "args": {"projeto": projeto}}
             logger.info("MSG=%s → handler=%s func=%s projeto=%s", msg[:80], result["handler"], result.get("func"), projeto)
             return result
 
-    # 10. Fallback → agente LLM
+    # 15. Fallback → agente LLM
     result = {"handler": "agent", "projeto": projeto}
     logger.info("MSG=%s → handler=%s (fallback to LLM)", msg[:80], result["handler"])
     return result

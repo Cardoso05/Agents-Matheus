@@ -6,7 +6,7 @@ import time
 import anthropic
 
 from cerebro.core.config import MODEL, SKILLS_DIR
-from cerebro.db import models, jobs as jobs_db
+from cerebro.db import models, jobs as jobs_db, models_finance
 from cerebro.db.metricas import registrar_metrica
 from cerebro.db.conversas import formatar_historico_para_prompt
 from cerebro.integrations import calendar, web_search
@@ -48,6 +48,11 @@ TOOLS DISPONÍVEIS:
 - listar_eventos_calendar: ver agenda do dia/semana
 - buscar_web: pesquisar na internet
 - ler_arquivo: ler conteúdo de um arquivo
+- registrar_lancamento: registrar gasto ou receita
+- listar_lancamentos: ver lançamentos financeiros
+- resumo_financeiro: entradas vs saídas do mês
+- registrar_compromisso: conta a pagar ou receber
+- listar_compromissos: ver compromissos financeiros
 
 IMPORTANTE:
 - Nunca invente dados. Se não tem informação, pergunte.
@@ -309,6 +314,79 @@ TOOLS = [
             "required": ["path"],
         },
     },
+    {
+        "name": "registrar_lancamento",
+        "description": "Registra um lançamento financeiro (gasto ou receita).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tipo": {"type": "string", "description": "entrada ou saida"},
+                "valor": {"type": "number", "description": "Valor em reais"},
+                "descricao": {"type": "string", "description": "Descrição do lançamento"},
+                "categoria": {"type": "string", "description": "alimentacao, transporte, material, servico, infra, marketing, assinatura, educacao, saude, projeto_receita, servico_receita, outros"},
+                "projeto": {"type": "string", "description": "Projeto (pessoal, engenharia, wipr, erp, gruta). Default: pessoal"},
+                "data": {"type": "string", "description": "Data YYYY-MM-DD. Default: hoje"},
+            },
+            "required": ["tipo", "valor", "descricao", "categoria"],
+        },
+    },
+    {
+        "name": "listar_lancamentos",
+        "description": "Lista lançamentos financeiros com filtros.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "projeto": {"type": "string", "description": "Filtrar por projeto"},
+                "categoria": {"type": "string", "description": "Filtrar por categoria"},
+                "tipo": {"type": "string", "description": "Filtrar por tipo (entrada/saida)"},
+                "mes": {"type": "string", "description": "Filtrar por mês (YYYY-MM)"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "resumo_financeiro",
+        "description": "Mostra resumo financeiro: entradas vs saídas, por categoria, saldo.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "mes": {"type": "string", "description": "Mês no formato YYYY-MM. Default: mês atual"},
+                "projeto": {"type": "string", "description": "Filtrar por projeto"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "registrar_compromisso",
+        "description": "Registra uma conta a pagar ou receber.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tipo": {"type": "string", "description": "pagar ou receber"},
+                "descricao": {"type": "string", "description": "Descrição do compromisso"},
+                "valor": {"type": "number", "description": "Valor em reais"},
+                "vencimento": {"type": "string", "description": "Data de vencimento YYYY-MM-DD"},
+                "projeto": {"type": "string", "description": "Projeto relacionado. Default: pessoal"},
+                "credor": {"type": "string", "description": "Credor ou pagador. Opcional."},
+                "parcela_atual": {"type": "integer", "description": "Parcela atual (ex: 2 de 5)"},
+                "parcela_total": {"type": "integer", "description": "Total de parcelas"},
+            },
+            "required": ["tipo", "descricao", "valor", "vencimento"],
+        },
+    },
+    {
+        "name": "listar_compromissos",
+        "description": "Lista compromissos financeiros (contas a pagar/receber).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tipo": {"type": "string", "description": "pagar ou receber"},
+                "status": {"type": "string", "description": "aberto, pago, vencido, cancelado"},
+                "projeto": {"type": "string", "description": "Filtrar por projeto"},
+            },
+            "required": [],
+        },
+    },
 ]
 
 
@@ -468,6 +546,55 @@ def _handle_ler_arquivo(path, **_):
         return f"❌ Erro ao ler arquivo: {e}"
 
 
+def _handle_registrar_lancamento(tipo, valor, descricao, categoria, projeto="pessoal", data=None, **_):
+    lancamento = models_finance.criar_lancamento(
+        tipo=tipo, valor=valor, descricao=descricao,
+        categoria=categoria, projeto=projeto, data=data,
+    )
+    emoji = "📈" if tipo == "entrada" else "📉"
+    return f"{emoji} Lançamento #{lancamento['id']} registrado: R${valor:,.2f} — {descricao} [{categoria}]"
+
+
+def _handle_listar_lancamentos(projeto=None, categoria=None, tipo=None, mes=None, **_):
+    lancamentos = models_finance.listar_lancamentos(
+        projeto=projeto, categoria=categoria, tipo=tipo, mes=mes,
+    )
+    if not lancamentos:
+        return "Nenhum lançamento encontrado."
+    lines = []
+    for l in lancamentos:
+        emoji = "📈" if l["tipo"] == "entrada" else "📉"
+        lines.append(f"{emoji} #{l['id']} {l['data']} R${l['valor']:,.2f} — {l['descricao']} [{l['categoria']}] ({l['projeto'].upper()})")
+    return "\n".join(lines)
+
+
+def _handle_resumo_financeiro_tool(mes=None, projeto=None, **_):
+    from cerebro.finance.deterministic import resumo_financeiro
+    return resumo_financeiro(mes=mes, projeto=projeto)
+
+
+def _handle_registrar_compromisso(tipo, descricao, valor, vencimento, projeto="pessoal", credor=None, parcela_atual=None, parcela_total=None, **_):
+    comp = models_finance.criar_compromisso(
+        tipo=tipo, descricao=descricao, valor=valor,
+        vencimento=vencimento, projeto=projeto, credor=credor,
+        parcela_atual=parcela_atual, parcela_total=parcela_total,
+    )
+    emoji = "💸" if tipo == "pagar" else "💰"
+    return f"{emoji} Compromisso #{comp['id']} registrado: R${valor:,.2f} — {descricao} (vence {vencimento})"
+
+
+def _handle_listar_compromissos(tipo=None, status=None, projeto=None, **_):
+    comps = models_finance.listar_compromissos(tipo=tipo, status=status, projeto=projeto)
+    if not comps:
+        return "Nenhum compromisso encontrado."
+    lines = []
+    for c in comps:
+        emoji = {"aberto": "⏳", "pago": "✅", "vencido": "🚨", "cancelado": "❌"}.get(c["status"], "❓")
+        parcela = f" ({c['parcela_atual']}/{c['parcela_total']})" if c.get("parcela_total") else ""
+        lines.append(f"{emoji} #{c['id']} {c['descricao']}{parcela} — R${c['valor']:,.2f} — vence {c['vencimento']} [{c['status']}]")
+    return "\n".join(lines)
+
+
 TOOL_HANDLERS = {
     "criar_pendencia": _handle_criar_pendencia,
     "concluir_pendencia": _handle_concluir_pendencia,
@@ -485,6 +612,11 @@ TOOL_HANDLERS = {
     "listar_eventos_calendar": _handle_listar_eventos_calendar,
     "buscar_web": _handle_buscar_web,
     "ler_arquivo": _handle_ler_arquivo,
+    "registrar_lancamento": _handle_registrar_lancamento,
+    "listar_lancamentos": _handle_listar_lancamentos,
+    "resumo_financeiro": _handle_resumo_financeiro_tool,
+    "registrar_compromisso": _handle_registrar_compromisso,
+    "listar_compromissos": _handle_listar_compromissos,
 }
 
 

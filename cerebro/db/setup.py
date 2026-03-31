@@ -165,4 +165,78 @@ CREATE TABLE IF NOT EXISTS eventos (
     google_event_id TEXT,
     criado_em       DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ══ Módulo Financeiro ══
+
+-- Lançamentos (entradas e saídas)
+CREATE TABLE IF NOT EXISTS lancamentos (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo            TEXT NOT NULL,
+    valor           REAL NOT NULL,
+    descricao       TEXT NOT NULL,
+    categoria       TEXT NOT NULL,
+    projeto         TEXT DEFAULT 'pessoal',
+    data            DATE NOT NULL,
+    data_vencimento DATE,
+    status          TEXT DEFAULT 'confirmado',
+    recorrente      BOOLEAN DEFAULT 0,
+    recorrencia     TEXT,
+    comprovante_path TEXT,
+    origem          TEXT DEFAULT 'manual',
+    hash_dedup      TEXT,
+    criado_em       DATETIME DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em   DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_lancamentos_projeto ON lancamentos(projeto);
+CREATE INDEX IF NOT EXISTS idx_lancamentos_data ON lancamentos(data);
+CREATE INDEX IF NOT EXISTS idx_lancamentos_categoria ON lancamentos(categoria);
+
+-- Categorias financeiras
+CREATE TABLE IF NOT EXISTS categorias (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome            TEXT NOT NULL UNIQUE,
+    tipo            TEXT NOT NULL,
+    emoji           TEXT,
+    keywords        TEXT,
+    ativo           BOOLEAN DEFAULT 1
+);
+
+-- Compromissos (contas a pagar/receber)
+CREATE TABLE IF NOT EXISTS compromissos (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo            TEXT NOT NULL,
+    descricao       TEXT NOT NULL,
+    valor           REAL NOT NULL,
+    projeto         TEXT DEFAULT 'pessoal',
+    credor          TEXT,
+    vencimento      DATE NOT NULL,
+    status          TEXT DEFAULT 'aberto',
+    parcela_atual   INTEGER,
+    parcela_total   INTEGER,
+    lancamento_id   INTEGER,
+    notas           TEXT,
+    criado_em       DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (lancamento_id) REFERENCES lancamentos(id)
+);
+
+-- Regras de categorização automática
+CREATE TABLE IF NOT EXISTS regras_categorizacao (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    pattern         TEXT NOT NULL,
+    categoria       TEXT NOT NULL,
+    projeto         TEXT,
+    prioridade      INTEGER DEFAULT 5,
+    ativo           BOOLEAN DEFAULT 1
+);
+
+-- Orçamento por categoria
+CREATE TABLE IF NOT EXISTS orcamento (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    categoria       TEXT NOT NULL,
+    projeto         TEXT DEFAULT 'pessoal',
+    valor_limite    REAL NOT NULL,
+    mes             TEXT NOT NULL,
+    UNIQUE(categoria, projeto, mes)
+);
 """

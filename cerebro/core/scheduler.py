@@ -90,6 +90,35 @@ async def pre_faculdade():
         await _notificar(f"📚 **Antes da faculdade:**\n\n{pend}")
 
 
+# ── Jobs Financeiros ──────────────────────────────────────
+
+
+async def contas_vencendo_amanha():
+    """20:00 diário — Alertar sobre contas vencendo amanhã."""
+    logger.info("Verificando contas vencendo amanhã")
+    from cerebro.finance.deterministic import contas_vencendo
+    resultado = contas_vencendo(dias=1)
+    if "Nenhuma" not in resultado:
+        await _notificar(resultado)
+
+
+async def contas_vencidas_alerta():
+    """09:00 diário — Alertar sobre contas vencidas."""
+    logger.info("Verificando contas vencidas")
+    from cerebro.finance.deterministic import contas_vencidas as _contas_vencidas
+    resultado = _contas_vencidas()
+    if "Nenhuma" not in resultado:
+        await _notificar(resultado)
+
+
+async def resumo_financeiro_semanal():
+    """Dom 19:00 — Resumo financeiro da semana."""
+    logger.info("Resumo financeiro semanal")
+    from cerebro.finance.deterministic import resumo_financeiro
+    resultado = resumo_financeiro()
+    await _notificar(resultado)
+
+
 # ── Jobs com LLM ───────────────────────────────────────────
 
 
@@ -131,6 +160,14 @@ def criar_scheduler() -> AsyncIOScheduler:
     scheduler.add_job(
         pre_faculdade, "cron",
         day_of_week="mon,thu,fri", hour=16, id="pre_faculdade",
+    )
+
+    # Financeiros (sem LLM)
+    scheduler.add_job(contas_vencendo_amanha, "cron", hour=20, id="contas_vencendo")
+    scheduler.add_job(contas_vencidas_alerta, "cron", hour=9, id="contas_vencidas")
+    scheduler.add_job(
+        resumo_financeiro_semanal, "cron",
+        day_of_week="sun", hour=19, id="resumo_financeiro_semanal",
     )
 
     # Com LLM

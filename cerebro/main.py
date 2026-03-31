@@ -20,6 +20,13 @@ from cerebro.core.deterministic import (
     status_geral,
     top_n_do_dia,
 )
+from cerebro.finance.deterministic import (
+    registrar_gasto_rapido,
+    registrar_receita_rapida,
+    resumo_financeiro,
+    contas_vencendo,
+    contas_vencidas,
+)
 from cerebro.db.setup import get_connection, init_db
 from cerebro.db.metricas import registrar_metrica, medir_tempo
 from cerebro.db.conversas import sessao_ativa, registrar_mensagem
@@ -37,6 +44,11 @@ DETERMINISTIC_FUNCS = {
     "concluir_tarefa": concluir_tarefa,
     "resumo_semanal": resumo_semanal,
     "eventos_semana": eventos_semana,
+    "registrar_gasto": registrar_gasto_rapido,
+    "registrar_receita": registrar_receita_rapida,
+    "resumo_financeiro": resumo_financeiro,
+    "contas_vencendo": contas_vencendo,
+    "contas_vencidas": contas_vencidas,
 }
 
 
