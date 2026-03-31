@@ -1,0 +1,15 @@
+[Unit]
+Description=Cérebro Dashboard Web
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/cerebro
+ExecStart=/opt/cerebro/.venv/bin/python -m cerebro.main --web --web-port 8000
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

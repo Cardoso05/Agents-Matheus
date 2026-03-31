@@ -1,0 +1,15 @@
+[Unit]
+Description=Cérebro Bot Telegram + Scheduler
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/cerebro
+ExecStart=/opt/cerebro/.venv/bin/python -m cerebro.main --telegram
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
