@@ -21,7 +21,7 @@ def criar_evento(
     notas: str | None = None,
     conn=None,
 ) -> dict:
-    """Cria um evento no calendário local."""
+    """Cria um evento no calendário local e sincroniza com Google Calendar."""
     conn = conn or get_connection()
     cursor = conn.execute(
         """INSERT INTO eventos (titulo, data, hora, duracao_minutos, projeto, notas)
@@ -29,7 +29,20 @@ def criar_evento(
         (titulo, data, hora, duracao_minutos, projeto, notas),
     )
     conn.commit()
-    return _get_evento(cursor.lastrowid, conn)
+    evento = _get_evento(cursor.lastrowid, conn)
+
+    # Sincronizar com Google Calendar
+    google_id = sync_to_google(evento)
+    if google_id:
+        conn.execute(
+            "UPDATE eventos SET google_event_id = ? WHERE id = ?",
+            (google_id, evento["id"]),
+        )
+        conn.commit()
+        evento = _get_evento(evento["id"], conn)
+        logger.info(f"Evento '{titulo}' sincronizado com Google Calendar: {google_id}")
+
+    return evento
 
 
 def listar_eventos(
