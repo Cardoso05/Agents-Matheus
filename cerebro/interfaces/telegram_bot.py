@@ -115,10 +115,20 @@ async def _processar_mensagem(texto: str, user_id: int | None = None) -> str:
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler do /start."""
-    if not _is_authorized(update.effective_user.id):
-        await update.message.reply_text("⛔ Acesso não autorizado.")
+    user_id = update.effective_user.id
+
+    if not _is_authorized(user_id):
+        await update.message.reply_text(
+            f"⛔ Acesso não autorizado.\n\n"
+            f"Seu user ID: `{user_id}`\n"
+            f"Adicione no .env:\n"
+            f"`TELEGRAM_AUTHORIZED_USERS={user_id}`\n"
+            f"E reinicie o serviço.",
+            parse_mode="Markdown",
+        )
         return
-    await update.message.reply_text(
+
+    msg = (
         "🧠 Cérebro ativo!\n\n"
         "Mande qualquer mensagem e eu processo.\n"
         "Exemplos:\n"
@@ -127,6 +137,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• pendências da WIPR\n"
         "• cria tarefa: fazer GIF pro ERP até sexta"
     )
+    if not AUTHORIZED_USERS:
+        msg += f"\n\n⚠️ Modo aberto (sem auth). Seu ID: `{user_id}`"
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
