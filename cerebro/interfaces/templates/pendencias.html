@@ -3,6 +3,47 @@
 {% block content %}
 <h2>Pendências</h2>
 
+<!-- Formulário criar tarefa -->
+<details>
+    <summary><strong>+ Criar Tarefa</strong></summary>
+    <form class="form-inline" id="form-criar-tarefa" onsubmit="criarTarefa(event)">
+        <div class="form-group form-group-wide">
+            <label>Tarefa</label>
+            <input type="text" name="tarefa" required placeholder="Descreva a tarefa...">
+        </div>
+        <div class="form-group">
+            <label>Projeto</label>
+            <select name="projeto" required>
+                {% for slug, info in projetos.items() %}
+                <option value="{{ slug }}">{{ info.emoji }} {{ info.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Prioridade</label>
+            <select name="prioridade">
+                <option value="1">P1 - Urgente</option>
+                <option value="2">P2 - Alta</option>
+                <option value="3" selected>P3 - Normal</option>
+                <option value="4">P4 - Baixa</option>
+                <option value="5">P5 - Eventual</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Prazo</label>
+            <input type="date" name="prazo">
+        </div>
+        <div class="form-group">
+            <label>Responsável</label>
+            <input type="text" name="responsavel" value="matheus">
+        </div>
+        <div class="form-group">
+            <button type="submit">Criar</button>
+        </div>
+    </form>
+</details>
+
+<!-- Filtros -->
 <form method="get" role="group">
     <select name="projeto" onchange="this.form.submit()">
         <option value="">Todos os projetos</option>
@@ -27,6 +68,7 @@
             <th>Prazo</th>
             <th>Responsável</th>
             <th>Status</th>
+            <th>Ações</th>
         </tr>
     </thead>
     <tbody>
@@ -43,11 +85,49 @@
             </td>
             <td>{{ p.responsavel }}{% if p.delegado_para %} → {{ p.delegado_para }}{% endif %}</td>
             <td><span class="badge badge-{{ p.status }}">{{ p.status }}</span></td>
+            <td>
+                {% if p.status == 'pendente' %}
+                <button class="btn-concluir" onclick="concluirTarefa({{ p.id }})">✓ Concluir</button>
+                {% endif %}
+                <button class="btn-excluir" onclick="excluirTarefa({{ p.id }})">✕</button>
+            </td>
         </tr>
         {% endfor %}
         {% if not pendencias %}
-        <tr><td colspan="7">Nenhuma pendência encontrada.</td></tr>
+        <tr><td colspan="8">Nenhuma pendência encontrada.</td></tr>
         {% endif %}
     </tbody>
 </table>
+
+<script>
+function concluirTarefa(id) {
+    fetch('/api/pendencias/' + id + '/concluir', { method: 'PUT' })
+        .then(r => r.json())
+        .then(() => location.reload());
+}
+
+function excluirTarefa(id) {
+    if (!confirm('Excluir tarefa #' + id + '?')) return;
+    fetch('/api/pendencias/' + id, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(() => location.reload());
+}
+
+function criarTarefa(e) {
+    e.preventDefault();
+    var form = e.target;
+    var data = {
+        tarefa: form.tarefa.value,
+        projeto: form.projeto.value,
+        prioridade: parseInt(form.prioridade.value),
+        prazo: form.prazo.value || null,
+        responsavel: form.responsavel.value || 'matheus'
+    };
+    fetch('/api/pendencias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    }).then(r => r.json()).then(() => location.reload());
+}
+</script>
 {% endblock %}

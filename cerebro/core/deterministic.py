@@ -253,6 +253,15 @@ def concluir_tarefa(id: int, conn=None) -> str:
     return result
 
 
+def eventos_semana(conn=None) -> str:
+    """Lista eventos da semana atual formatados."""
+    from cerebro.integrations.calendar import eventos_da_semana, formatar_eventos
+    eventos = eventos_da_semana(conn=conn)
+    if not eventos:
+        return "📅 Nenhum evento esta semana."
+    return "📅 **Agenda da Semana**\n" + formatar_eventos(eventos)
+
+
 def resumo_semanal(conn=None) -> str:
     """Criadas vs concluídas na última semana, métricas gerais."""
     conn = conn or get_connection()

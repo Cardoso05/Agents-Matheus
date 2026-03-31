@@ -13,6 +13,7 @@ from cerebro.core.deterministic import (
     concluir_tarefa,
     criar_tarefa,
     delegacoes_pendentes,
+    eventos_semana,
     pendencias_projeto,
     projetos_parados,
     resumo_semanal,
@@ -35,6 +36,7 @@ DETERMINISTIC_FUNCS = {
     "criar_tarefa": criar_tarefa,
     "concluir_tarefa": concluir_tarefa,
     "resumo_semanal": resumo_semanal,
+    "eventos_semana": eventos_semana,
 }
 
 
@@ -118,6 +120,8 @@ def main():
     parser.add_argument("--init-db", action="store_true", help="Inicializar banco de dados")
     parser.add_argument("--telegram", action="store_true", help="Iniciar bot Telegram")
     parser.add_argument("--process-jobs", action="store_true", help="Processar jobs pendentes")
+    parser.add_argument("--create-job", nargs=2, metavar=("TIPO", "INSTRUCOES"), help="Criar job (tipo instrucoes)")
+    parser.add_argument("--job-projeto", default=None, help="Projeto para --create-job")
     parser.add_argument("--web", action="store_true", help="Iniciar dashboard web")
     parser.add_argument("--web-host", default="127.0.0.1", help="Host do dashboard (default: 127.0.0.1)")
     parser.add_argument("--web-port", type=int, default=8000, help="Porta do dashboard")
@@ -155,6 +159,16 @@ def main():
 
     if args.telegram:
         _run_telegram()
+        return
+
+    if args.create_job:
+        from cerebro.db.jobs import criar_job
+        tipo, instrucoes = args.create_job
+        job = criar_job(tipo=tipo, instrucoes=instrucoes, projeto=args.job_projeto)
+        print(f"✅ Job criado: {job['id']} [{tipo}]")
+        if args.job_projeto:
+            print(f"   Projeto: {args.job_projeto}")
+        print(f"   Instruções: {instrucoes}")
         return
 
     if args.process_jobs:

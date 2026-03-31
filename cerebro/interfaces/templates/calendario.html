@@ -3,6 +3,41 @@
 {% block content %}
 <h2>Calendário — Semana Atual</h2>
 
+<!-- Formulário criar evento -->
+<details>
+    <summary><strong>+ Criar Evento</strong></summary>
+    <form class="form-inline" id="form-criar-evento" onsubmit="criarEvento(event)">
+        <div class="form-group form-group-wide">
+            <label>Título</label>
+            <input type="text" name="titulo" required placeholder="Nome do evento...">
+        </div>
+        <div class="form-group">
+            <label>Data</label>
+            <input type="date" name="data" required>
+        </div>
+        <div class="form-group">
+            <label>Hora</label>
+            <input type="time" name="hora">
+        </div>
+        <div class="form-group">
+            <label>Duração (min)</label>
+            <input type="number" name="duracao_minutos" value="60" min="15" step="15">
+        </div>
+        <div class="form-group">
+            <label>Projeto</label>
+            <select name="projeto">
+                <option value="">—</option>
+                {% for slug, info in projetos.items() %}
+                <option value="{{ slug }}">{{ info.emoji }} {{ info.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <button type="submit">Criar</button>
+        </div>
+    </form>
+</details>
+
 {% if eventos %}
 <table>
     <thead>
@@ -29,4 +64,23 @@
 {% else %}
 <p>Nenhum evento esta semana.</p>
 {% endif %}
+
+<script>
+function criarEvento(e) {
+    e.preventDefault();
+    var form = e.target;
+    var data = {
+        titulo: form.titulo.value,
+        data: form.data.value,
+        hora: form.hora.value || null,
+        duracao_minutos: parseInt(form.duracao_minutos.value) || 60,
+        projeto: form.projeto.value || null
+    };
+    fetch('/api/eventos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    }).then(r => r.json()).then(() => location.reload());
+}
+</script>
 {% endblock %}

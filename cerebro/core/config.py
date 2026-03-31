@@ -18,6 +18,7 @@ PROJETOS = {
     "engenharia": {"nome": "DELMAT Engenharia", "prioridade": 3, "emoji": "\U0001f7e1"},
     "gruta": {"nome": "Gruta Máquinas", "prioridade": 4, "emoji": "\U0001f7e1"},
     "faculdade": {"nome": "Faculdade", "prioridade": 5, "emoji": "\U0001f7e2"},
+    "geral": {"nome": "Geral", "prioridade": 6, "emoji": "\u26aa"},
 }
 
 # Aliases para detecção flexível de projeto

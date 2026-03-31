@@ -115,4 +115,21 @@ def seed_all(conn=None):
         conn=conn,
     )
 
-    print(f"✅ Seed completo: {conn.execute('SELECT COUNT(*) FROM pendencias').fetchone()[0]} pendências criadas")
+    # ── Jobs de exemplo ──────────────────────────────────
+
+    from cerebro.db.jobs import criar_job
+
+    criar_job(
+        tipo="relatorio",
+        instrucoes="Gere o status geral de todos os projetos com métricas de pendências, atrasadas e delegações.",
+        projeto=None,
+        conn=conn,
+    )
+    criar_job(
+        tipo="auditoria",
+        instrucoes="Verifique pendências atrasadas, delegações sem resposta há mais de 3 dias, e projetos parados.",
+        projeto=None,
+        conn=conn,
+    )
+
+    print(f"✅ Seed completo: {conn.execute('SELECT COUNT(*) FROM pendencias').fetchone()[0]} pendências, 2 jobs criados")

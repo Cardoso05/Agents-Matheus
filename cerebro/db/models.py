@@ -126,6 +126,17 @@ def listar_pendencias(
     return result
 
 
+def deletar_pendencia(id: int, conn=None) -> bool:
+    """Remove uma pendência pelo ID."""
+    conn = conn or get_connection()
+    pendencia = get_pendencia(id, conn)
+    if not pendencia:
+        return False
+    conn.execute("DELETE FROM pendencias WHERE id = ?", (id,))
+    conn.commit()
+    return True
+
+
 def delegar_tarefa(id: int, pessoa: str, conn=None) -> dict | None:
     conn = conn or get_connection()
     pendencia = get_pendencia(id, conn)

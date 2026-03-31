@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from cerebro.db.setup import init_db
 from cerebro.db import models, jobs as jobs_db
-from cerebro.db.metricas import metricas_periodo, custo_periodo
+from cerebro.db.metricas import metricas_periodo, custo_periodo, erros_recentes
 from cerebro.db.conversas import historico_sessao
 from cerebro.integrations import calendar
 from cerebro.core.config import PROJETOS
@@ -49,6 +49,13 @@ class NovoEvento(BaseModel):
     duracao_minutos: int = 60
     projeto: str | None = None
     notas: str | None = None
+
+
+class NovoJob(BaseModel):
+    tipo: str
+    instrucoes: str
+    projeto: str | None = None
+    escopo: dict | None = None
 
 
 class Mensagem(BaseModel):
@@ -119,6 +126,22 @@ def api_concluir_pendencia(id: int):
     return result
 
 
+@app.delete("/api/pendencias/{id}")
+def api_deletar_pendencia(id: int):
+    ok = models.deletar_pendencia(id)
+    if not ok:
+        return {"error": "Pendência não encontrada"}
+    return {"ok": True, "id": id}
+
+
+@app.put("/api/pendencias/{id}")
+def api_atualizar_pendencia(id: int, campos: dict):
+    result = models.atualizar_pendencia(id, **campos)
+    if not result:
+        return {"error": "Pendência não encontrada"}
+    return result
+
+
 @app.get("/api/eventos")
 def api_eventos(
     data_inicio: str | None = None,
@@ -144,6 +167,14 @@ def api_jobs(status: str | None = None, projeto: str | None = None):
 @app.get("/api/jobs/{id}")
 def api_job_detail(id: str):
     return jobs_db.get_job(id)
+
+
+@app.post("/api/jobs")
+def api_criar_job(j: NovoJob):
+    return jobs_db.criar_job(
+        tipo=j.tipo, instrucoes=j.instrucoes,
+        projeto=j.projeto, escopo=j.escopo,
+    )
 
 
 @app.get("/api/metricas")
@@ -202,8 +233,17 @@ def page_pendencias(request: Request, projeto: str | None = None, status: str | 
 @app.get("/calendario", response_class=HTMLResponse)
 def page_calendario(request: Request):
     eventos = calendar.eventos_da_semana()
+    # Dedup por (titulo, data, hora)
+    seen = set()
+    deduped = []
+    for ev in eventos:
+        key = (ev.get("titulo"), ev.get("data"), ev.get("hora"))
+        if key not in seen:
+            seen.add(key)
+            deduped.append(ev)
     return templates.TemplateResponse(request, "calendario.html", {
-        "eventos": eventos,
+        "eventos": deduped,
+        "projetos": PROJETOS,
     })
 
 
@@ -212,6 +252,7 @@ def page_jobs(request: Request):
     jobs = jobs_db.listar_jobs()
     return templates.TemplateResponse(request, "jobs.html", {
         "jobs": jobs,
+        "projetos": PROJETOS,
     })
 
 
@@ -219,7 +260,9 @@ def page_jobs(request: Request):
 def page_metricas(request: Request):
     metricas = metricas_periodo(dias=7)
     custos = custo_periodo(dias=30)
+    erros = erros_recentes(dias=7)
     return templates.TemplateResponse(request, "metricas.html", {
         "metricas": metricas,
         "custos": custos,
+        "erros_recentes": erros,
     })
