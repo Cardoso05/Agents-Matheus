@@ -168,10 +168,16 @@ def api_mensagem(m: Mensagem):
 
 @app.get("/", response_class=HTMLResponse)
 def page_dashboard(request: Request):
-    status = api_status()
+    try:
+        status = api_status()
+    except Exception:
+        status = {"projetos": [], "total": 0, "total_atrasadas": 0}
     top3 = top_n_do_dia(n=5)
     atr = atrasadas()
-    metricas = metricas_periodo(dias=7)
+    try:
+        metricas = metricas_periodo(dias=7)
+    except Exception:
+        metricas = {"total_interacoes": 0, "custo_total": 0}
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,

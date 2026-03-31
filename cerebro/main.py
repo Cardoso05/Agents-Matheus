@@ -195,9 +195,13 @@ def _run_telegram():
 
     set_notificar_callback(notificar_via_telegram)
 
-    # Iniciar scheduler junto com o bot
+    # Iniciar scheduler DEPOIS que o event loop estiver rodando
     scheduler = criar_scheduler()
-    scheduler.start()
+
+    async def post_init(application):
+        scheduler.start()
+
+    app.post_init = post_init
 
     print("🧠 Cérebro Bot + Scheduler iniciados!")
     app.run_polling()
