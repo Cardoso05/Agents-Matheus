@@ -30,6 +30,9 @@ web = [
 [project.scripts]
 cerebro = "cerebro.main:main"
 
+[tool.setuptools.packages.find]
+include = ["cerebro*"]
+
 [tool.pytest.ini_options]
 testpaths = ["cerebro/evals"]
 pythonpath = ["."]
