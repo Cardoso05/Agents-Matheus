@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Pendências{% endblock %}
+{% block content %}
+<h2>Pendências</h2>
+
+<form method="get" role="group">
+    <select name="projeto" onchange="this.form.submit()">
+        <option value="">Todos os projetos</option>
+        {% for slug, info in projetos.items() %}
+        <option value="{{ slug }}" {% if projeto_filtro == slug %}selected{% endif %}>{{ info.emoji }} {{ info.nome }}</option>
+        {% endfor %}
+    </select>
+    <select name="status" onchange="this.form.submit()">
+        <option value="pendente" {% if status_filtro == 'pendente' %}selected{% endif %}>Pendentes</option>
+        <option value="concluida" {% if status_filtro == 'concluida' %}selected{% endif %}>Concluídas</option>
+        <option value="" {% if not status_filtro %}selected{% endif %}>Todas</option>
+    </select>
+</form>
+
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Tarefa</th>
+            <th>Projeto</th>
+            <th>Prioridade</th>
+            <th>Prazo</th>
+            <th>Responsável</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for p in pendencias %}
+        <tr>
+            <td>{{ p.id }}</td>
+            <td>{{ p.tarefa }}</td>
+            <td>{{ p.projeto | upper }}</td>
+            <td>P{{ p.prioridade }}</td>
+            <td>
+                {% if p.prazo %}
+                    {% if p.atrasada %}<span class="atrasada">{{ p.prazo }}</span>{% else %}{{ p.prazo }}{% endif %}
+                {% else %}—{% endif %}
+            </td>
+            <td>{{ p.responsavel }}{% if p.delegado_para %} → {{ p.delegado_para }}{% endif %}</td>
+            <td><span class="badge badge-{{ p.status }}">{{ p.status }}</span></td>
+        </tr>
+        {% endfor %}
+        {% if not pendencias %}
+        <tr><td colspan="7">Nenhuma pendência encontrada.</td></tr>
+        {% endif %}
+    </tbody>
+</table>
+{% endblock %}

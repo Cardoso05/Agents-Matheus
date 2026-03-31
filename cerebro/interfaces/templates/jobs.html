@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Jobs{% endblock %}
+{% block content %}
+<h2>Jobs de Background</h2>
+
+{% if jobs %}
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Tipo</th>
+            <th>Projeto</th>
+            <th>Status</th>
+            <th>Criado em</th>
+            <th>Concluído em</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for j in jobs %}
+        <tr>
+            <td><code>{{ j.id }}</code></td>
+            <td>{{ j.tipo }}</td>
+            <td>{{ j.projeto | upper if j.projeto else '—' }}</td>
+            <td><span class="badge badge-{{ j.status }}">{{ j.status }}</span></td>
+            <td>{{ j.criado_em }}</td>
+            <td>{{ j.concluido_em or '—' }}</td>
+        </tr>
+        {% if j.resultado %}
+        <tr>
+            <td colspan="6">
+                <details>
+                    <summary>Ver resultado</summary>
+                    <pre class="output">{{ j.resultado[:2000] }}{{ '...' if j.resultado|length > 2000 else '' }}</pre>
+                </details>
+            </td>
+        </tr>
+        {% endif %}
+        {% if j.erro %}
+        <tr>
+            <td colspan="6"><small class="atrasada">Erro: {{ j.erro }}</small></td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>Nenhum job registrado.</p>
+{% endif %}
+{% endblock %}

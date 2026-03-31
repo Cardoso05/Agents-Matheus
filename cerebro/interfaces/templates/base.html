@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Cérebro{% endblock %} — Central de Controle</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        :root { --pico-font-size: 15px; }
+        nav { padding: 0.5rem 1rem; }
+        nav ul { margin: 0; }
+        .grid-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .card { padding: 1rem; border-radius: 8px; background: var(--pico-card-background-color); border: 1px solid var(--pico-muted-border-color); }
+        .card h3 { margin: 0 0 0.5rem 0; font-size: 0.9rem; color: var(--pico-muted-color); }
+        .card .value { font-size: 1.8rem; font-weight: bold; }
+        .card .subtitle { font-size: 0.8rem; color: var(--pico-muted-color); }
+        .atrasada { color: #e74c3c; }
+        .urgente { color: #e67e22; }
+        .ok { color: #27ae60; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; }
+        .badge-pendente { background: #ffeaa7; color: #2d3436; }
+        .badge-executando { background: #74b9ff; color: #fff; }
+        .badge-concluido { background: #55efc4; color: #2d3436; }
+        .badge-erro { background: #fab1a0; color: #2d3436; }
+        pre.output { background: var(--pico-card-background-color); padding: 1rem; border-radius: 8px; white-space: pre-wrap; font-size: 0.85rem; border: 1px solid var(--pico-muted-border-color); }
+        table { font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <nav class="container-fluid">
+        <ul>
+            <li><strong>🧠 Cérebro</strong></li>
+        </ul>
+        <ul>
+            <li><a href="/">Dashboard</a></li>
+            <li><a href="/pendencias">Pendências</a></li>
+            <li><a href="/calendario">Calendário</a></li>
+            <li><a href="/jobs">Jobs</a></li>
+            <li><a href="/metricas">Métricas</a></li>
+        </ul>
+    </nav>
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="container">
+        <small>Cérebro v0.2 — Central de Controle</small>
+    </footer>
+</body>
+</html>

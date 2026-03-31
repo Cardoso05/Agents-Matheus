@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h2>Dashboard</h2>
+
+<div class="grid-cards">
+    <div class="card">
+        <h3>Total Pendências</h3>
+        <div class="value">{{ status.total }}</div>
+        {% if status.total_atrasadas > 0 %}
+        <div class="subtitle atrasada">{{ status.total_atrasadas }} atrasada{{ 's' if status.total_atrasadas > 1 else '' }}</div>
+        {% else %}
+        <div class="subtitle ok">Tudo em dia</div>
+        {% endif %}
+    </div>
+    {% for p in status.projetos %}
+    <div class="card">
+        <h3>{{ p.emoji }} {{ p.nome }}</h3>
+        <div class="value">{{ p.total }}</div>
+        <div class="subtitle">
+            {% if p.atrasadas > 0 %}<span class="atrasada">{{ p.atrasadas }} atrasada{{ 's' if p.atrasadas > 1 else '' }}</span>{% endif %}
+            {% if p.urgentes > 0 %}<span class="urgente"> {{ p.urgentes }} urgente{{ 's' if p.urgentes > 1 else '' }}</span>{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    <div class="card">
+        <h3>Interações (7d)</h3>
+        <div class="value">{{ metricas.total_interacoes or 0 }}</div>
+        <div class="subtitle">Custo: ${{ "%.2f"|format(metricas.custo_total or 0) }}</div>
+    </div>
+</div>
+
+<div class="grid">
+    <div>
+        <h3>Top 5 do Dia</h3>
+        <pre class="output">{{ top5 }}</pre>
+    </div>
+    <div>
+        <h3>Atrasadas</h3>
+        <pre class="output">{{ atrasadas }}</pre>
+    </div>
+</div>
+{% endblock %}

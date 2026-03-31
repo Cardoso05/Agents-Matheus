@@ -1,8 +1,10 @@
 """Runner — processa fila de jobs executando workers."""
 
 import logging
+import time
 
 from cerebro.db import jobs as jobs_db
+from cerebro.db.metricas import registrar_metrica
 from cerebro.workers.registry import get_worker
 
 logger = logging.getLogger(__name__)
@@ -28,10 +30,20 @@ def processar_proximo_job(conn=None) -> bool:
         jobs_db.falhar_job(job_id, erro, conn=conn)
         return True
 
+    inicio = time.monotonic()
     try:
         resultado = worker.executar(job)
+        duracao_ms = int((time.monotonic() - inicio) * 1000)
         jobs_db.concluir_job(job_id, resultado, conn=conn)
         logger.info(f"Job {job_id} concluído com sucesso")
+
+        try:
+            registrar_metrica(
+                tipo="worker", funcao=tipo, projeto=job.get("projeto"),
+                duracao_ms=duracao_ms, sucesso=True,
+            )
+        except Exception:
+            pass
 
         # Notificar via callback se disponível
         _notificar_conclusao(job, resultado)
@@ -39,9 +51,19 @@ def processar_proximo_job(conn=None) -> bool:
         return True
 
     except Exception as e:
+        duracao_ms = int((time.monotonic() - inicio) * 1000)
         erro = f"Erro na execução: {e}"
         logger.error(f"Job {job_id} falhou: {erro}", exc_info=True)
         jobs_db.falhar_job(job_id, erro, conn=conn)
+
+        try:
+            registrar_metrica(
+                tipo="worker", funcao=tipo, projeto=job.get("projeto"),
+                duracao_ms=duracao_ms, sucesso=False, erro=str(e),
+            )
+        except Exception:
+            pass
+
         return True
 
 

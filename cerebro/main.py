@@ -20,6 +20,8 @@ from cerebro.core.deterministic import (
     top_n_do_dia,
 )
 from cerebro.db.setup import get_connection, init_db
+from cerebro.db.metricas import registrar_metrica, medir_tempo
+from cerebro.db.conversas import sessao_ativa, registrar_mensagem
 
 
 # Mapa de funções determinísticas
@@ -36,20 +38,34 @@ DETERMINISTIC_FUNCS = {
 }
 
 
-def processar_mensagem(mensagem: str) -> str:
+def processar_mensagem(mensagem: str, sessao_id: str | None = None) -> str:
     """Rota principal: classifica e executa."""
     result = classificar(mensagem)
 
     if result["handler"] == "deterministic":
         func = DETERMINISTIC_FUNCS[result["func"]]
         args = result.get("args", {})
-        return func(**args)
+        with medir_tempo() as t:
+            response = func(**args)
+        try:
+            registrar_metrica(
+                tipo="deterministic", funcao=result["func"],
+                projeto=result.get("args", {}).get("projeto"),
+                duracao_ms=t["duracao_ms"],
+            )
+        except Exception:
+            pass
+        return response
 
     elif result["handler"] == "agent":
         try:
             from cerebro.core.agent import AgenteGerente
             agente = AgenteGerente()
-            return agente.processar(mensagem, projeto=result.get("projeto"))
+            return agente.processar(
+                mensagem,
+                projeto=result.get("projeto"),
+                sessao_id=sessao_id,
+            )
         except Exception as e:
             return f"❌ Erro no agente: {e}\n\n(Verifique se ANTHROPIC_API_KEY está configurada no .env)"
 
@@ -57,9 +73,11 @@ def processar_mensagem(mensagem: str) -> str:
 
 
 def cli_loop():
-    """Loop interativo do CLI."""
+    """Loop interativo do CLI com memória de conversa."""
     print("🧠 Cérebro v0.1 — Sistema de Gestão")
     print("Digite 'sair' para encerrar.\n")
+
+    sessao_id = sessao_ativa("cli", "cli_user")
 
     while True:
         try:
@@ -74,8 +92,20 @@ def cli_loop():
             print("👋 Até mais!")
             break
 
-        response = processar_mensagem(msg)
+        # Registrar mensagem do usuário
+        try:
+            registrar_mensagem(sessao_id, "user", msg, "cli", user_id="cli_user")
+        except Exception:
+            pass
+
+        response = processar_mensagem(msg, sessao_id=sessao_id)
         print(f"\n🤖 Cérebro:\n{response}\n")
+
+        # Registrar resposta
+        try:
+            registrar_mensagem(sessao_id, "assistant", response, "cli", user_id="cli_user")
+        except Exception:
+            pass
 
 
 def main():
@@ -88,6 +118,8 @@ def main():
     parser.add_argument("--init-db", action="store_true", help="Inicializar banco de dados")
     parser.add_argument("--telegram", action="store_true", help="Iniciar bot Telegram")
     parser.add_argument("--process-jobs", action="store_true", help="Processar jobs pendentes")
+    parser.add_argument("--web", action="store_true", help="Iniciar dashboard web")
+    parser.add_argument("--web-port", type=int, default=8000, help="Porta do dashboard")
 
     args = parser.parse_args()
 
@@ -133,6 +165,10 @@ def main():
             print("Nenhum job pendente na fila.")
         return
 
+    if args.web:
+        _run_web(args.web_port)
+        return
+
     # Modo interativo
     cli_loop()
 
@@ -164,6 +200,15 @@ def _run_telegram():
 
     print("🧠 Cérebro Bot + Scheduler iniciados!")
     app.run_polling()
+
+
+def _run_web(port: int):
+    """Inicia o dashboard web."""
+    import uvicorn
+    from cerebro.interfaces.web_api import app
+
+    print(f"🧠 Cérebro Dashboard em http://0.0.0.0:{port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 
 if __name__ == "__main__":

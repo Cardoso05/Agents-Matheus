@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Calendário{% endblock %}
+{% block content %}
+<h2>Calendário — Semana Atual</h2>
+
+{% if eventos %}
+<table>
+    <thead>
+        <tr>
+            <th>Data</th>
+            <th>Hora</th>
+            <th>Evento</th>
+            <th>Duração</th>
+            <th>Projeto</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for ev in eventos %}
+        <tr>
+            <td>{{ ev.data }}</td>
+            <td>{{ ev.hora or 'dia todo' }}</td>
+            <td>{{ ev.titulo }}</td>
+            <td>{{ ev.duracao_minutos }}min</td>
+            <td>{{ ev.projeto | upper if ev.projeto else '—' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>Nenhum evento esta semana.</p>
+{% endif %}
+{% endblock %}

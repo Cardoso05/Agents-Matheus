@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Métricas{% endblock %}
+{% block content %}
+<h2>Métricas de Uso</h2>
+
+<div class="grid-cards">
+    <div class="card">
+        <h3>Interações (7d)</h3>
+        <div class="value">{{ metricas.total_interacoes or 0 }}</div>
+    </div>
+    <div class="card">
+        <h3>Determinísticas</h3>
+        <div class="value ok">{{ metricas.deterministic or 0 }}</div>
+        <div class="subtitle">sem custo LLM</div>
+    </div>
+    <div class="card">
+        <h3>Via Agente</h3>
+        <div class="value">{{ metricas.agent or 0 }}</div>
+    </div>
+    <div class="card">
+        <h3>Workers</h3>
+        <div class="value">{{ metricas.worker or 0 }}</div>
+    </div>
+    <div class="card">
+        <h3>Custo Total (7d)</h3>
+        <div class="value">${{ "%.2f"|format(metricas.custo_total or 0) }}</div>
+    </div>
+    <div class="card">
+        <h3>Tokens Input</h3>
+        <div class="value">{{ "{:,}".format(metricas.total_tokens_input or 0) }}</div>
+    </div>
+    <div class="card">
+        <h3>Tokens Output</h3>
+        <div class="value">{{ "{:,}".format(metricas.total_tokens_output or 0) }}</div>
+    </div>
+    <div class="card">
+        <h3>Tempo Médio</h3>
+        <div class="value">{{ "%.0f"|format(metricas.duracao_media_ms or 0) }}ms</div>
+    </div>
+</div>
+
+<h3>Custo por Tipo (30 dias)</h3>
+{% if custos.por_tipo %}
+<table>
+    <thead>
+        <tr>
+            <th>Tipo</th>
+            <th>Interações</th>
+            <th>Tokens In</th>
+            <th>Tokens Out</th>
+            <th>Custo</th>
+            <th>Tempo Médio</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for t in custos.por_tipo %}
+        <tr>
+            <td>{{ t.tipo }}</td>
+            <td>{{ t.interacoes }}</td>
+            <td>{{ "{:,}".format(t.tokens_input or 0) }}</td>
+            <td>{{ "{:,}".format(t.tokens_output or 0) }}</td>
+            <td>${{ "%.3f"|format(t.custo or 0) }}</td>
+            <td>{{ "%.0f"|format(t.duracao_media_ms or 0) }}ms</td>
+        </tr>
+        {% endfor %}
+        <tr>
+            <td><strong>Total</strong></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td><strong>${{ "%.3f"|format(custos.total or 0) }}</strong></td>
+            <td></td>
+        </tr>
+    </tbody>
+</table>
+{% else %}
+<p>Nenhuma métrica registrada nos últimos 30 dias.</p>
+{% endif %}
+
+{% if metricas.erros and metricas.erros > 0 %}
+<p class="atrasada">⚠️ {{ metricas.erros }} erro{{ 's' if metricas.erros > 1 else '' }} nos últimos 7 dias.</p>
+{% endif %}
+{% endblock %}

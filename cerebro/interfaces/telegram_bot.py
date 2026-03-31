@@ -62,25 +62,52 @@ def _is_authorized(user_id: int) -> bool:
     return user_id in AUTHORIZED_USERS
 
 
-async def _processar_mensagem(texto: str) -> str:
-    """Rota principal: classifica e executa."""
+async def _processar_mensagem(texto: str, user_id: int | None = None) -> str:
+    """Rota principal: classifica e executa com memória de conversa."""
+    from cerebro.db.conversas import sessao_ativa, registrar_mensagem as reg_msg
+    from cerebro.db.metricas import registrar_metrica, medir_tempo
+
     result = classificar(texto)
+    sessao_id = None
+
+    # Obter/criar sessão para contexto
+    if user_id is not None:
+        sessao_id = sessao_ativa("telegram", str(user_id))
+        try:
+            reg_msg(sessao_id, "user", texto, "telegram", user_id=str(user_id),
+                    projeto=result.get("projeto"), classificacao=result["handler"])
+        except Exception:
+            pass
 
     if result["handler"] == "deterministic":
         func = DETERMINISTIC_FUNCS[result["func"]]
         args = result.get("args", {})
-        return func(**args)
-
+        with medir_tempo() as t:
+            response = func(**args)
+        try:
+            registrar_metrica(tipo="deterministic", funcao=result["func"],
+                              duracao_ms=t["duracao_ms"])
+        except Exception:
+            pass
     elif result["handler"] == "agent":
         try:
             from cerebro.core.agent import AgenteGerente
             agente = AgenteGerente()
-            return agente.processar(texto, projeto=result.get("projeto"))
+            response = agente.processar(texto, projeto=result.get("projeto"), sessao_id=sessao_id)
         except Exception as e:
             logger.error(f"Erro no agente: {e}", exc_info=True)
-            return f"❌ Erro no agente: {e}"
+            response = f"❌ Erro no agente: {e}"
+    else:
+        response = "❌ Handler desconhecido."
 
-    return "❌ Handler desconhecido."
+    # Registrar resposta na conversa
+    if sessao_id:
+        try:
+            reg_msg(sessao_id, "assistant", response, "telegram", user_id=str(user_id))
+        except Exception:
+            pass
+
+    return response
 
 
 # ── Handlers ────────────────────────────────────────────────
@@ -143,7 +170,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Indica que está processando
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
-    response = await _processar_mensagem(texto)
+    response = await _processar_mensagem(texto, user_id=update.effective_user.id)
 
     # Telegram tem limite de 4096 chars por mensagem
     if len(response) <= 4096:

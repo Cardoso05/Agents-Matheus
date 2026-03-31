@@ -123,6 +123,36 @@ CREATE TABLE IF NOT EXISTS jobs (
     notificar       TEXT DEFAULT 'telegram'
 );
 
+-- Métricas de uso
+CREATE TABLE IF NOT EXISTS metricas (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo            TEXT NOT NULL,
+    funcao          TEXT,
+    projeto         TEXT,
+    tokens_input    INTEGER DEFAULT 0,
+    tokens_output   INTEGER DEFAULT 0,
+    custo_estimado  REAL DEFAULT 0.0,
+    duracao_ms      INTEGER DEFAULT 0,
+    sucesso         BOOLEAN DEFAULT 1,
+    erro            TEXT,
+    timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Conversas (memória multi-turn)
+CREATE TABLE IF NOT EXISTS conversas (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    sessao_id       TEXT NOT NULL,
+    canal           TEXT NOT NULL,
+    user_id         TEXT,
+    role            TEXT NOT NULL,
+    conteudo        TEXT NOT NULL,
+    projeto         TEXT,
+    classificacao   TEXT,
+    timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversas_sessao ON conversas(sessao_id);
+
 -- Calendário (eventos)
 CREATE TABLE IF NOT EXISTS eventos (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,

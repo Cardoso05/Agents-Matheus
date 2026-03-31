@@ -1,11 +1,14 @@
 """Agente Gerente — único agente LLM do Cérebro."""
 
 import os
+import time
 
 import anthropic
 
 from cerebro.core.config import MODEL, SKILLS_DIR
 from cerebro.db import models, jobs as jobs_db
+from cerebro.db.metricas import registrar_metrica
+from cerebro.db.conversas import formatar_historico_para_prompt
 from cerebro.integrations import calendar, web_search
 
 # ── System Prompt Base ──────────────────────────────────────
@@ -493,43 +496,80 @@ class AgenteGerente:
         self.client = anthropic.Anthropic()
         self.model = MODEL
 
-    def processar(self, mensagem: str, projeto: str | None = None) -> str:
+    def processar(self, mensagem: str, projeto: str | None = None, sessao_id: str | None = None) -> str:
         """Processa mensagem via LLM com tools. Retorna texto final."""
         system_prompt = self._build_prompt(projeto)
-        messages = [{"role": "user", "content": mensagem}]
 
-        for _ in range(10):  # Safety limit
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=2048,
-                system=system_prompt,
-                tools=TOOLS,
-                messages=messages,
+        # Injetar histórico de conversa se disponível
+        messages = []
+        if sessao_id:
+            historico = formatar_historico_para_prompt(sessao_id, limite=10)
+            messages.extend(historico)
+        messages.append({"role": "user", "content": mensagem})
+
+        inicio = time.monotonic()
+        total_input = 0
+        total_output = 0
+
+        try:
+            for _ in range(10):  # Safety limit
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=2048,
+                    system=system_prompt,
+                    tools=TOOLS,
+                    messages=messages,
+                )
+
+                # Acumular tokens
+                if hasattr(response, "usage"):
+                    total_input += response.usage.input_tokens
+                    total_output += response.usage.output_tokens
+
+                # Resposta final (sem tool calls)
+                if response.stop_reason == "end_turn":
+                    resultado = self._extract_text(response)
+                    self._registrar_metricas(projeto, total_input, total_output, inicio, True)
+                    return resultado
+
+                # Processar tool calls
+                if response.stop_reason == "tool_use":
+                    messages.append({"role": "assistant", "content": response.content})
+
+                    tool_results = []
+                    for block in response.content:
+                        if block.type == "tool_use":
+                            result = self._execute_tool(block.name, block.input)
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": result,
+                            })
+
+                    messages.append({"role": "user", "content": tool_results})
+                else:
+                    resultado = self._extract_text(response)
+                    self._registrar_metricas(projeto, total_input, total_output, inicio, True)
+                    return resultado
+
+            self._registrar_metricas(projeto, total_input, total_output, inicio, False, "limite_iteracoes")
+            return "⚠️ Limite de iterações atingido. Tente reformular o pedido."
+
+        except Exception as e:
+            self._registrar_metricas(projeto, total_input, total_output, inicio, False, str(e))
+            raise
+
+    def _registrar_metricas(self, projeto, tokens_in, tokens_out, inicio, sucesso, erro=None):
+        """Registra métricas da interação."""
+        try:
+            duracao_ms = int((time.monotonic() - inicio) * 1000)
+            registrar_metrica(
+                tipo="agent", funcao="processar", projeto=projeto,
+                tokens_input=tokens_in, tokens_output=tokens_out,
+                duracao_ms=duracao_ms, sucesso=sucesso, erro=erro,
             )
-
-            # Resposta final (sem tool calls)
-            if response.stop_reason == "end_turn":
-                return self._extract_text(response)
-
-            # Processar tool calls
-            if response.stop_reason == "tool_use":
-                messages.append({"role": "assistant", "content": response.content})
-
-                tool_results = []
-                for block in response.content:
-                    if block.type == "tool_use":
-                        result = self._execute_tool(block.name, block.input)
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": result,
-                        })
-
-                messages.append({"role": "user", "content": tool_results})
-            else:
-                return self._extract_text(response)
-
-        return "⚠️ Limite de iterações atingido. Tente reformular o pedido."
+        except Exception:
+            pass  # Não falhar por causa de métricas
 
     def _build_prompt(self, projeto: str | None = None) -> str:
         """Monta system prompt com base + skill + pendências + decisões."""
