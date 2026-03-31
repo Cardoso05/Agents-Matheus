@@ -119,6 +119,7 @@ def main():
     parser.add_argument("--telegram", action="store_true", help="Iniciar bot Telegram")
     parser.add_argument("--process-jobs", action="store_true", help="Processar jobs pendentes")
     parser.add_argument("--web", action="store_true", help="Iniciar dashboard web")
+    parser.add_argument("--web-host", default="127.0.0.1", help="Host do dashboard (default: 127.0.0.1)")
     parser.add_argument("--web-port", type=int, default=8000, help="Porta do dashboard")
 
     args = parser.parse_args()
@@ -166,7 +167,7 @@ def main():
         return
 
     if args.web:
-        _run_web(args.web_port)
+        _run_web(args.web_host, args.web_port)
         return
 
     # Modo interativo
@@ -202,13 +203,13 @@ def _run_telegram():
     app.run_polling()
 
 
-def _run_web(port: int):
+def _run_web(host: str = "127.0.0.1", port: int = 8000):
     """Inicia o dashboard web."""
     import uvicorn
     from cerebro.interfaces.web_api import app
 
-    print(f"🧠 Cérebro Dashboard em http://0.0.0.0:{port}")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    print(f"🧠 Cérebro Dashboard em http://{host}:{port}")
+    uvicorn.run(app, host=host, port=port)
 
 
 if __name__ == "__main__":

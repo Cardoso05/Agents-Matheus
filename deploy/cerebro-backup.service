@@ -1,0 +1,7 @@
+[Unit]
+Description=Backup diário do Cérebro
+
+[Service]
+Type=oneshot
+User=cerebro
+ExecStart=/opt/cerebro/deploy/backup.sh
