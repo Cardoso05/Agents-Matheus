@@ -7,7 +7,7 @@ Type=simple
 User=root
 WorkingDirectory=/opt/finbot
 EnvironmentFile=/opt/finbot/.env.local
-ExecStart=/usr/bin/node /opt/finbot/node_modules/.bin/next start -p 3000
+ExecStart=/usr/bin/node /opt/finbot/.next/standalone/server.js
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -16,6 +16,7 @@ StandardError=journal
 # Limites
 Environment=NODE_ENV=production
 Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
 
 [Install]
 WantedBy=multi-user.target
