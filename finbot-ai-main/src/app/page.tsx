@@ -1,23 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Bot, TrendingUp, Shield, Zap } from "lucide-react";
 
-export default async function HomePage() {
-  let user = null;
-  try {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
-  } catch {
-    // Supabase not configured yet — show landing page
-  }
-
-  if (user) {
-    redirect("/dashboard");
-  }
-
+export default function HomePage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto">
@@ -26,11 +10,11 @@ export default async function HomePage() {
           <span className="text-xl font-bold">FinBot AI</span>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/login">
-            <Button variant="ghost">Entrar</Button>
+          <Link href="/login" className="px-4 py-2 text-sm font-medium hover:underline">
+            Entrar
           </Link>
-          <Link href="/signup">
-            <Button>Criar conta</Button>
+          <Link href="/signup" className="px-4 py-2 text-sm font-medium bg-sky-500 text-white rounded-lg hover:bg-sky-600">
+            Criar conta
           </Link>
         </div>
       </header>
@@ -42,14 +26,12 @@ export default async function HomePage() {
             <br />
             <span className="text-sky-500">com inteligência artificial</span>
           </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-lg text-gray-500 max-w-2xl mx-auto">
             Faça upload dos seus extratos bancários e deixe a IA categorizar,
             analisar e criar um plano para quitar suas dívidas mais rápido.
           </p>
-          <Link href="/signup">
-            <Button size="lg" className="mt-4">
-              Começar grátis
-            </Button>
+          <Link href="/signup" className="inline-block px-6 py-3 mt-4 text-sm font-medium bg-sky-500 text-white rounded-lg hover:bg-sky-600">
+            Começar grátis
           </Link>
         </div>
 
@@ -59,7 +41,7 @@ export default async function HomePage() {
               <Zap className="h-6 w-6 text-sky-500" />
             </div>
             <h3 className="font-semibold text-lg">Categorização automática</h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-gray-500">
               IA categoriza seus gastos automaticamente com base nos extratos bancários.
             </p>
           </div>
@@ -68,7 +50,7 @@ export default async function HomePage() {
               <TrendingUp className="h-6 w-6 text-green-500" />
             </div>
             <h3 className="font-semibold text-lg">Plano de quitação</h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-gray-500">
               Compare métodos Avalanche vs Bola de Neve e veja quando ficará livre das dívidas.
             </p>
           </div>
@@ -77,7 +59,7 @@ export default async function HomePage() {
               <Shield className="h-6 w-6 text-purple-500" />
             </div>
             <h3 className="font-semibold text-lg">Open Finance</h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-gray-500">
               Conecte seus bancos via Open Finance para sincronização automática.
             </p>
           </div>
