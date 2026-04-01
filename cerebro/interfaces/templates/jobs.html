@@ -6,7 +6,7 @@
 <!-- Formulário criar job -->
 <details>
     <summary><strong>+ Criar Job</strong></summary>
-    <form class="form-inline" id="form-criar-job" onsubmit="criarJob(event)">
+    <form class="form-inline" id="form-criar-job">
         <div class="form-group">
             <label>Tipo</label>
             <select name="tipo" required>
@@ -80,21 +80,4 @@
 {% else %}
 <p>Nenhum job registrado.</p>
 {% endif %}
-
-<script>
-function criarJob(e) {
-    e.preventDefault();
-    var form = e.target;
-    var data = {
-        tipo: form.tipo.value,
-        instrucoes: form.instrucoes.value,
-        projeto: form.projeto.value || null
-    };
-    fetch('/api/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-    }).then(r => r.json()).then(() => location.reload());
-}
-</script>
 {% endblock %}

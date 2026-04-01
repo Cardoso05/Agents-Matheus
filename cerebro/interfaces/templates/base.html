@@ -36,7 +36,6 @@
         .form-inline input, .form-inline select, .form-inline textarea { margin-bottom: 0; }
         .form-inline .form-group { display: flex; flex-direction: column; gap: 0.25rem; }
         .form-inline .form-group-wide { flex: 1; min-width: 200px; }
-        /* Responsive */
         @media (max-width: 768px) {
             .grid-cards { grid-template-columns: 1fr 1fr; }
             .form-inline { flex-direction: column; }
@@ -70,26 +69,6 @@
     <footer class="container">
         <small>Cérebro v0.2 — Central de Controle</small>
     </footer>
-    <script>
-    // Simple markdown to HTML (bold, italic, emoji-safe)
-    function renderMarkdown(text) {
-        return text
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.+?)\*/g, '<em>$1</em>')
-            .replace(/^### (.+)$/gm, '<h4>$1</h4>')
-            .replace(/^## (.+)$/gm, '<h3>$1</h3>')
-            .replace(/^# (.+)$/gm, '<h2>$1</h2>')
-            .replace(/^• (.+)$/gm, '<li>$1</li>')
-            .replace(/\n/g, '<br>');
-    }
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('pre.output').forEach(function(el) {
-            var div = document.createElement('div');
-            div.className = 'output-md';
-            div.innerHTML = renderMarkdown(el.textContent);
-            el.replaceWith(div);
-        });
-    });
-    </script>
+    <script src="/static/js/app.js"></script>
 </body>
 </html>

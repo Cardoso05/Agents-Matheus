@@ -6,7 +6,7 @@
 <!-- Formulário criar tarefa -->
 <details>
     <summary><strong>+ Criar Tarefa</strong></summary>
-    <form class="form-inline" id="form-criar-tarefa" onsubmit="criarTarefa(event)">
+    <form class="form-inline" id="form-criar-tarefa">
         <div class="form-group form-group-wide">
             <label>Tarefa</label>
             <input type="text" name="tarefa" required placeholder="Descreva a tarefa...">
@@ -45,13 +45,13 @@
 
 <!-- Filtros -->
 <form method="get" role="group">
-    <select name="projeto" onchange="this.form.submit()">
+    <select name="projeto" data-autosubmit>
         <option value="">Todos os projetos</option>
         {% for slug, info in projetos.items() %}
         <option value="{{ slug }}" {% if projeto_filtro == slug %}selected{% endif %}>{{ info.emoji }} {{ info.nome }}</option>
         {% endfor %}
     </select>
-    <select name="status" onchange="this.form.submit()">
+    <select name="status" data-autosubmit>
         <option value="pendente" {% if status_filtro == 'pendente' %}selected{% endif %}>Pendentes</option>
         <option value="concluida" {% if status_filtro == 'concluida' %}selected{% endif %}>Concluídas</option>
         <option value="" {% if not status_filtro %}selected{% endif %}>Todas</option>
@@ -87,9 +87,9 @@
             <td><span class="badge badge-{{ p.status }}">{{ p.status }}</span></td>
             <td>
                 {% if p.status == 'pendente' %}
-                <button class="btn-concluir" onclick="concluirTarefa({{ p.id }})">✓ Concluir</button>
+                <button class="btn-concluir" data-concluir="{{ p.id }}">✓ Concluir</button>
                 {% endif %}
-                <button class="btn-excluir" onclick="excluirTarefa({{ p.id }})">✕</button>
+                <button class="btn-excluir" data-excluir-pendencia="{{ p.id }}">✕</button>
             </td>
         </tr>
         {% endfor %}
@@ -98,36 +98,4 @@
         {% endif %}
     </tbody>
 </table>
-
-<script>
-function concluirTarefa(id) {
-    fetch('/api/pendencias/' + id + '/concluir', { method: 'PUT' })
-        .then(r => r.json())
-        .then(() => location.reload());
-}
-
-function excluirTarefa(id) {
-    if (!confirm('Excluir tarefa #' + id + '?')) return;
-    fetch('/api/pendencias/' + id, { method: 'DELETE' })
-        .then(r => r.json())
-        .then(() => location.reload());
-}
-
-function criarTarefa(e) {
-    e.preventDefault();
-    var form = e.target;
-    var data = {
-        tarefa: form.tarefa.value,
-        projeto: form.projeto.value,
-        prioridade: parseInt(form.prioridade.value),
-        prazo: form.prazo.value || null,
-        responsavel: form.responsavel.value || 'matheus'
-    };
-    fetch('/api/pendencias', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-    }).then(r => r.json()).then(() => location.reload());
-}
-</script>
 {% endblock %}
