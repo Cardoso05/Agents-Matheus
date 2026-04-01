@@ -188,6 +188,27 @@ def api_criar_evento(e: NovoEvento):
     )
 
 
+@app.put("/api/eventos/{id}")
+def api_atualizar_evento(id: int, campos: dict):
+    result = calendar.atualizar_evento(id, **campos)
+    if not result:
+        raise HTTPException(status_code=404, detail="Evento não encontrado")
+    return result
+
+
+@app.delete("/api/eventos/{id}")
+def api_deletar_evento(id: int):
+    try:
+        ok = calendar.deletar_evento(id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Evento não encontrado")
+        return {"ok": True, "id": id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/jobs")
 def api_jobs(status: str | None = None, projeto: str | None = None):
     return jobs_db.listar_jobs(status=status, projeto=projeto)

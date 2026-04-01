@@ -47,16 +47,41 @@
             <th>Evento</th>
             <th>Duração</th>
             <th>Projeto</th>
+            <th>Ações</th>
         </tr>
     </thead>
     <tbody>
         {% for ev in eventos %}
-        <tr>
+        <!-- Linha de visualização -->
+        <tr id="row-{{ ev.id }}">
             <td>{{ ev.data }}</td>
             <td>{{ ev.hora or 'dia todo' }}</td>
             <td>{{ ev.titulo }}</td>
             <td>{{ ev.duracao_minutos }}min</td>
             <td>{{ ev.projeto | upper if ev.projeto else '—' }}</td>
+            <td>
+                <button class="btn-concluir" data-editar-evento="{{ ev.id }}">✎</button>
+                <button class="btn-excluir" data-excluir-evento="{{ ev.id }}">✕</button>
+            </td>
+        </tr>
+        <!-- Linha de edição (escondida) -->
+        <tr id="edit-{{ ev.id }}" style="display:none">
+            <td><input type="date" name="data" value="{{ ev.data }}" data-field="data" data-evento-id="{{ ev.id }}"></td>
+            <td><input type="time" name="hora" value="{{ ev.hora or '' }}" data-field="hora" data-evento-id="{{ ev.id }}"></td>
+            <td><input type="text" name="titulo" value="{{ ev.titulo }}" data-field="titulo" data-evento-id="{{ ev.id }}"></td>
+            <td><input type="number" name="duracao_minutos" value="{{ ev.duracao_minutos }}" min="15" step="15" data-field="duracao_minutos" data-evento-id="{{ ev.id }}"></td>
+            <td>
+                <select name="projeto" data-field="projeto" data-evento-id="{{ ev.id }}">
+                    <option value="">—</option>
+                    {% for slug, info in projetos.items() %}
+                    <option value="{{ slug }}" {% if ev.projeto == slug %}selected{% endif %}>{{ info.emoji }} {{ info.nome }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td>
+                <button class="btn-concluir" data-salvar-evento="{{ ev.id }}">✓</button>
+                <button class="btn-excluir" data-cancelar-evento="{{ ev.id }}">✕</button>
+            </td>
         </tr>
         {% endfor %}
     </tbody>

@@ -32,7 +32,7 @@ def criar_evento(
     evento = _get_evento(cursor.lastrowid, conn)
 
     # Sincronizar com Google Calendar
-    google_id = sync_to_google(evento)
+    google_id = _sync_create_google(evento)
     if google_id:
         conn.execute(
             "UPDATE eventos SET google_event_id = ? WHERE id = ?",
@@ -41,6 +41,32 @@ def criar_evento(
         conn.commit()
         evento = _get_evento(evento["id"], conn)
         logger.info(f"Evento '{titulo}' sincronizado com Google Calendar: {google_id}")
+
+    return evento
+
+
+def atualizar_evento(id: int, conn=None, **campos) -> dict | None:
+    """Atualiza campos de um evento e sincroniza com Google Calendar."""
+    conn = conn or get_connection()
+    evento = _get_evento(id, conn)
+    if not evento:
+        return None
+
+    allowed = {"titulo", "data", "hora", "duracao_minutos", "projeto", "notas"}
+    updates = {k: v for k, v in campos.items() if k in allowed and v is not None}
+    if not updates:
+        return evento
+
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [id]
+    conn.execute(f"UPDATE eventos SET {set_clause} WHERE id = ?", values)
+    conn.commit()
+
+    evento = _get_evento(id, conn)
+
+    # Sincronizar atualização com Google Calendar
+    if evento.get("google_event_id"):
+        _sync_update_google(evento)
 
     return evento
 
@@ -92,11 +118,19 @@ def eventos_da_semana(conn=None) -> list[dict]:
 
 
 def deletar_evento(id: int, conn=None) -> bool:
-    """Remove um evento."""
+    """Remove um evento local e do Google Calendar."""
     conn = conn or get_connection()
-    cursor = conn.execute("DELETE FROM eventos WHERE id = ?", (id,))
+    evento = _get_evento(id, conn)
+    if not evento:
+        return False
+
+    # Deletar do Google Calendar primeiro
+    if evento.get("google_event_id"):
+        _sync_delete_google(evento["google_event_id"])
+
+    conn.execute("DELETE FROM eventos WHERE id = ?", (id,))
     conn.commit()
-    return cursor.rowcount > 0
+    return True
 
 
 def _get_evento(id: int, conn) -> dict:
@@ -104,7 +138,7 @@ def _get_evento(id: int, conn) -> dict:
     return dict(row) if row else {}
 
 
-# ── Google Calendar (quando configurado) ────────────────────
+# ── Google Calendar Sync ──────────────────────────────────────
 
 
 def _get_google_service():
@@ -149,33 +183,77 @@ def _get_google_service():
         return None
 
 
-def sync_to_google(evento: dict) -> str | None:
-    """Tenta sincronizar evento com Google Calendar. Retorna event_id ou None."""
+def _build_google_body(evento: dict) -> dict:
+    """Constrói o body para a API do Google Calendar."""
+    hora = evento.get("hora") or "09:00"
+    data = evento["data"]
+    duracao = evento.get("duracao_minutos", 60)
+
+    start_dt = datetime.fromisoformat(f"{data}T{hora}:00")
+    end_dt = start_dt + timedelta(minutes=duracao)
+
+    body = {
+        "summary": evento["titulo"],
+        "start": {"dateTime": start_dt.isoformat(), "timeZone": "America/Sao_Paulo"},
+        "end": {"dateTime": end_dt.isoformat(), "timeZone": "America/Sao_Paulo"},
+    }
+    if evento.get("notas"):
+        body["description"] = evento["notas"]
+    return body
+
+
+def _sync_create_google(evento: dict) -> str | None:
+    """Cria evento no Google Calendar. Retorna event_id ou None."""
     service = _get_google_service()
     if not service:
         return None
-
     try:
-        hora = evento.get("hora", "09:00")
-        data = evento["data"]
-        duracao = evento.get("duracao_minutos", 60)
-
-        start_dt = datetime.fromisoformat(f"{data}T{hora}:00")
-        end_dt = start_dt + timedelta(minutes=duracao)
-
-        body = {
-            "summary": evento["titulo"],
-            "start": {"dateTime": start_dt.isoformat(), "timeZone": "America/Sao_Paulo"},
-            "end": {"dateTime": end_dt.isoformat(), "timeZone": "America/Sao_Paulo"},
-        }
-        if evento.get("notas"):
-            body["description"] = evento["notas"]
-
+        body = _build_google_body(evento)
         result = service.events().insert(calendarId="primary", body=body).execute()
         return result.get("id")
     except Exception as e:
-        logger.error(f"Erro ao sincronizar com Google Calendar: {e}")
+        logger.error(f"Erro ao criar no Google Calendar: {e}")
         return None
+
+
+def _sync_update_google(evento: dict) -> bool:
+    """Atualiza evento no Google Calendar."""
+    service = _get_google_service()
+    if not service:
+        return False
+    try:
+        body = _build_google_body(evento)
+        service.events().update(
+            calendarId="primary",
+            eventId=evento["google_event_id"],
+            body=body,
+        ).execute()
+        logger.info(f"Evento '{evento['titulo']}' atualizado no Google Calendar")
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar no Google Calendar: {e}")
+        return False
+
+
+def _sync_delete_google(google_event_id: str) -> bool:
+    """Deleta evento do Google Calendar."""
+    service = _get_google_service()
+    if not service:
+        return False
+    try:
+        service.events().delete(
+            calendarId="primary",
+            eventId=google_event_id,
+        ).execute()
+        logger.info(f"Evento {google_event_id} deletado do Google Calendar")
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao deletar do Google Calendar: {e}")
+        return False
+
+
+# Alias for backwards compatibility
+sync_to_google = _sync_create_google
 
 
 # ── Formatação ──────────────────────────────────────────────

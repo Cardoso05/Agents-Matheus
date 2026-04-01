@@ -108,6 +108,56 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    // ── Editar evento (toggle edit row) ────────────────────
+    document.querySelectorAll('[data-editar-evento]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.getAttribute('data-editar-evento');
+            document.getElementById('row-' + id).style.display = 'none';
+            document.getElementById('edit-' + id).style.display = '';
+        });
+    });
+
+    // ── Cancelar edição evento ──────────────────────────────
+    document.querySelectorAll('[data-cancelar-evento]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.getAttribute('data-cancelar-evento');
+            document.getElementById('row-' + id).style.display = '';
+            document.getElementById('edit-' + id).style.display = 'none';
+        });
+    });
+
+    // ── Salvar evento (PUT) ─────────────────────────────────
+    document.querySelectorAll('[data-salvar-evento]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.getAttribute('data-salvar-evento');
+            var editRow = document.getElementById('edit-' + id);
+            var campos = {};
+            editRow.querySelectorAll('[data-field]').forEach(function (input) {
+                var field = input.getAttribute('data-field');
+                var val = input.value;
+                if (field === 'duracao_minutos') val = parseInt(val) || 60;
+                if (val !== '') campos[field] = val;
+            });
+            apiCall('/api/eventos/' + id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(campos)
+            }).then(function () { location.reload(); })
+              .catch(function (err) { alert('Erro ao salvar: ' + err.message); });
+        });
+    });
+
+    // ── Excluir evento ──────────────────────────────────────
+    document.querySelectorAll('[data-excluir-evento]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.getAttribute('data-excluir-evento');
+            if (!confirm('Excluir evento #' + id + '?')) return;
+            apiCall('/api/eventos/' + id, { method: 'DELETE' })
+                .then(function () { location.reload(); })
+                .catch(function (err) { alert('Erro ao excluir: ' + err.message); });
+        });
+    });
+
     // ── Criar job ───────────────────────────────────────────
     var formJob = document.getElementById('form-criar-job');
     if (formJob) {
