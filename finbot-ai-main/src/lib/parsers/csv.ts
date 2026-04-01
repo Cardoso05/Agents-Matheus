@@ -1,8 +1,9 @@
 import { RawTransaction } from "./index";
 import { generateExternalId } from "@/lib/utils/dedup";
+import { decodeBuffer } from "@/lib/utils/encoding";
 
 export function parseCSV(file: Buffer): RawTransaction[] {
-  const content = file.toString("utf-8");
+  const content = decodeBuffer(file);
   const lines = content.trim().split("\n");
 
   if (lines.length < 2) throw new Error("Arquivo CSV vazio ou inválido");
@@ -21,6 +22,9 @@ export function parseCSV(file: Buffer): RawTransaction[] {
 
 function parseNubankCSV(lines: string[], delimiter: string): RawTransaction[] {
   const transactions: RawTransaction[] = [];
+  // Track occurrences of identical (date, amount, description) to handle
+  // legitimate duplicate transactions (e.g., two identical purchases)
+  const occurrenceCount = new Map<string, number>();
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -32,7 +36,11 @@ function parseNubankCSV(lines: string[], delimiter: string): RawTransaction[] {
     if (!date || !amount) continue;
 
     const parsedAmount = parseFloat(amount.replace(",", "."));
-    if (isNaN(parsedAmount)) continue;
+    if (isNaN(parsedAmount) || parsedAmount === 0) continue;
+
+    const key = `${date}|${parsedAmount}|${(title || "").trim().toLowerCase()}`;
+    const occurrence = occurrenceCount.get(key) || 0;
+    occurrenceCount.set(key, occurrence + 1);
 
     const tx: RawTransaction = {
       date: parseDate(date),
@@ -40,7 +48,7 @@ function parseNubankCSV(lines: string[], delimiter: string): RawTransaction[] {
       description: title || "Sem descrição",
       type: parsedAmount >= 0 ? "income" : "expense",
       bank_slug: "nubank",
-      external_id: generateExternalId(date, parsedAmount, title),
+      external_id: generateExternalId(date, parsedAmount, title, occurrence),
     };
     transactions.push(tx);
   }
@@ -68,6 +76,7 @@ function parseGenericCSV(
   }
 
   const transactions: RawTransaction[] = [];
+  const occurrenceCount = new Map<string, number>();
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -83,7 +92,11 @@ function parseGenericCSV(
     const amount = parseFloat(
       rawAmount.replace(/[R$\s]/g, "").replace(/\./g, "").replace(",", ".")
     );
-    if (isNaN(amount)) continue;
+    if (isNaN(amount) || amount === 0) continue;
+
+    const key = `${date}|${amount}|${description.trim().toLowerCase()}`;
+    const occurrence = occurrenceCount.get(key) || 0;
+    occurrenceCount.set(key, occurrence + 1);
 
     transactions.push({
       date: parseDate(date),
@@ -91,7 +104,7 @@ function parseGenericCSV(
       description,
       type: amount >= 0 ? "income" : "expense",
       bank_slug: "generic",
-      external_id: generateExternalId(date, amount, description),
+      external_id: generateExternalId(date, amount, description, occurrence),
     });
   }
 

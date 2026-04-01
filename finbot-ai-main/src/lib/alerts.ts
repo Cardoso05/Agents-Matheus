@@ -178,16 +178,25 @@ async function checkOverspendAlerts(
       (pastByCategory[tx.category_id] ?? 0) + Math.abs(tx.amount);
   }
 
-  // Compare current vs average
+  // Compare current vs proportionalized average (account for incomplete month)
+  const now2 = new Date();
+  const dayOfMonth = now2.getDate();
+  const daysInCurrentMonth = new Date(now2.getFullYear(), now2.getMonth() + 1, 0).getDate();
+
   for (const [catId, current] of Object.entries(currentByCategory)) {
     const pastTotal = pastByCategory[catId];
     if (!pastTotal) continue;
 
-    const avg = pastTotal / 3;
-    if (avg === 0) continue;
+    const monthlyAvg = pastTotal / 3;
+    if (monthlyAvg === 0) continue;
 
-    const pct = (current.total / avg) * 100;
+    // Proportionalize: expected spending so far this month
+    const expectedSoFar = (monthlyAvg / daysInCurrentMonth) * dayOfMonth;
+    if (expectedSoFar === 0) continue;
+
+    const pct = (current.total / expectedSoFar) * 100;
     if (pct > 120) {
+      const avg = monthlyAvg; // keep for display
       const exists = await alertExistsToday(
         userId,
         supabase,

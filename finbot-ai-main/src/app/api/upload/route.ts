@@ -18,6 +18,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Nenhum arquivo enviado" }, { status: 400 });
     }
 
+    // Server-side validation: max 10MB
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: "Arquivo muito grande. Máximo permitido: 10MB." },
+        { status: 400 }
+      );
+    }
+
+    // Server-side validation: allowed extensions
+    const allowedExtensions = [".csv", ".ofx", ".qfx", ".pdf"];
+    const fileName = file.name.toLowerCase();
+    const hasValidExtension = allowedExtensions.some((ext) => fileName.endsWith(ext));
+    if (!hasValidExtension) {
+      return NextResponse.json(
+        { error: `Formato não suportado. Use: ${allowedExtensions.join(", ")}` },
+        { status: 400 }
+      );
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer());
     const transactions = await parseFile(buffer, file.name);
 
@@ -59,7 +79,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { transactions } = body as {
+    const { transactions, file_extension } = body as {
       transactions: {
         date: string;
         amount: number;
@@ -68,11 +88,21 @@ export async function PUT(request: NextRequest) {
         bank_slug: string;
         external_id: string;
       }[];
+      file_extension?: string;
     };
 
     if (!transactions || transactions.length === 0) {
       return NextResponse.json({ error: "Nenhuma transação para importar" }, { status: 400 });
     }
+
+    // Determine correct source based on file extension
+    const sourceMap: Record<string, "upload_csv" | "upload_ofx" | "upload_pdf"> = {
+      csv: "upload_csv",
+      ofx: "upload_ofx",
+      qfx: "upload_ofx",
+      pdf: "upload_pdf",
+    };
+    const source = sourceMap[file_extension?.toLowerCase() || "csv"] || "upload_csv";
 
     const rows = transactions.map((tx) => ({
       user_id: user.id,
@@ -80,7 +110,7 @@ export async function PUT(request: NextRequest) {
       amount: tx.amount,
       description: tx.description,
       type: tx.type as "income" | "expense" | "transfer",
-      source: "upload_csv" as const,
+      source,
       external_id: tx.external_id,
       metadata: { bank_slug: tx.bank_slug },
     }));

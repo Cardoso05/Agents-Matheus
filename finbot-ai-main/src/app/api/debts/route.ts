@@ -31,6 +31,20 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
+
+  // Validate interest_rate is monthly decimal (e.g., 0.0199 for 1.99%/month)
+  // If someone passes a value > 1, they likely passed a percentage (e.g., 1.99 instead of 0.0199)
+  if (typeof body.interest_rate === "number" && body.interest_rate > 1) {
+    body.interest_rate = body.interest_rate / 100;
+  }
+  // Sanity check: monthly rate above 50% is almost certainly an error
+  if (typeof body.interest_rate === "number" && body.interest_rate > 0.5) {
+    return NextResponse.json(
+      { error: "Taxa de juros mensal parece incorreta. Informe o percentual mensal (ex: 1.99 para 1.99%/mês)." },
+      { status: 400 }
+    );
+  }
+
   const { data, error } = await supabase
     .from("debts")
     .insert({ ...body, user_id: user.id })

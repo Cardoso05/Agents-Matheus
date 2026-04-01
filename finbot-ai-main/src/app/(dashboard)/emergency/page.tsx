@@ -58,6 +58,7 @@ export default function EmergencyPage() {
       const { data: txs } = await supabase
         .from("transactions")
         .select("amount, type, category:categories(name, group_name)")
+        .eq("user_id", user.id)
         .gte("date", start)
         .lte("date", end);
 

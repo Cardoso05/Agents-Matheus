@@ -63,39 +63,30 @@ export function PaymentDialog({
     setSaving(true);
 
     try {
-      // Insert payment
-      const { error: paymentError } = await supabase
-        .from("debt_payments")
-        .insert({
-          debt_id: debt.id,
-          date,
-          amount,
-          is_extra: isExtra,
-          notes: notes || null,
-        });
+      // Atomic payment: insert payment + update balance in a single DB transaction
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Sessão expirada");
 
-      if (paymentError) throw paymentError;
+      const { data: result, error: rpcError } = await supabase.rpc(
+        "record_debt_payment",
+        {
+          p_debt_id: debt.id,
+          p_user_id: user.id,
+          p_date: date,
+          p_amount: amount,
+          p_is_extra: isExtra,
+          p_notes: notes || null,
+        }
+      );
 
-      // Update debt balance
-      const oldBalance = Number(debt.current_balance);
-      const newBalance = Math.max(0, oldBalance - amount);
+      if (rpcError) throw rpcError;
 
-      const updateData: Record<string, unknown> = {
-        current_balance: newBalance,
-      };
-      if (newBalance <= 0) {
-        updateData.status = "paid_off";
-      }
-
-      const { error: updateError } = await supabase
-        .from("debts")
-        .update(updateData)
-        .eq("id", debt.id);
-
-      if (updateError) throw updateError;
+      const oldBalance = Number(result.old_balance);
+      const newBalance = Number(result.new_balance);
+      const isPaidOff = result.is_paid_off;
 
       // Celebration!
-      if (newBalance <= 0) {
+      if (isPaidOff) {
         setShowConfetti(true);
         toast.success(
           `${debt.name} QUITADA! Parabéns! \u{1F389}\u{1F38A}`,
@@ -110,8 +101,7 @@ export function PaymentDialog({
         let message = `Pagamento de ${formatCurrency(amount)} registrado!\nSaldo: ${formatCurrency(newBalance)} (era ${formatCurrency(oldBalance)})`;
 
         if (isExtra) {
-          const estimatedSavings = amount * debt.interest_rate * 3;
-          message += `\nVocê economizou ~${formatCurrency(estimatedSavings)} em juros com esse extra! \u{1F4AA}`;
+          message += `\nPagamento extra aplicado! Isso reduz juros futuros. \u{1F4AA}`;
         }
 
         toast.success(message, { duration: 4000 });

@@ -42,17 +42,22 @@ export default function BudgetPage() {
       const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
       const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
 
-      // Last 3 months income average
+      // Last 3 COMPLETE months income average (exclude current month)
       const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().split("T")[0];
+      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
       const { data: incomeTxs } = await supabase
         .from("transactions")
-        .select("amount")
+        .select("amount, date")
         .eq("type", "income")
         .gte("date", threeMonthsAgo)
-        .lte("date", end);
+        .lt("date", currentMonthStart);
 
-      const totalIncome3m = (incomeTxs || []).reduce((s, t) => s + Number(t.amount), 0);
-      const avgIncome = totalIncome3m / 3 || 0;
+      const totalIncome = (incomeTxs || []).reduce((s, t) => s + Number(t.amount), 0);
+      // Count distinct months with income data to avoid dividing by 3 when there are fewer months
+      const monthsWithData = new Set(
+        (incomeTxs || []).map((t) => (t.date as string).substring(0, 7))
+      ).size;
+      const avgIncome = monthsWithData > 0 ? totalIncome / monthsWithData : 0;
       setIncome(avgIncome);
 
       // Current month expenses by category group

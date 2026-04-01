@@ -1,8 +1,9 @@
 import { RawTransaction } from "./index";
 import { generateExternalId } from "@/lib/utils/dedup";
+import { decodeBuffer } from "@/lib/utils/encoding";
 
 export function parseOFX(file: Buffer): RawTransaction[] {
-  const content = file.toString("utf-8");
+  const content = decodeBuffer(file);
   const transactions: RawTransaction[] = [];
 
   // Extract STMTTRN blocks
@@ -16,19 +17,33 @@ export function parseOFX(file: Buffer): RawTransaction[] {
     const trnAmt = extractTag(block, "TRNAMT");
     const memo = extractTag(block, "MEMO") || extractTag(block, "NAME") || "";
     const fitId = extractTag(block, "FITID") || "";
+    const trnType = extractTag(block, "TRNTYPE")?.toUpperCase() || "";
 
     if (!dtPosted || !trnAmt) continue;
 
     const amount = parseFloat(trnAmt.replace(",", "."));
-    if (isNaN(amount)) continue;
+    if (isNaN(amount) || amount === 0) continue;
 
     const date = parseOFXDate(dtPosted);
+
+    // Use TRNTYPE to determine transaction type when available
+    let txType: "income" | "expense" | "transfer";
+    if (trnType === "XFER" || trnType === "OTHER") {
+      txType = "transfer";
+    } else if (trnType === "CREDIT" || trnType === "DEP" || trnType === "INT" || trnType === "DIV") {
+      txType = "income";
+    } else if (trnType === "DEBIT" || trnType === "CHECK" || trnType === "PAYMENT" || trnType === "FEE" || trnType === "SRVCHG" || trnType === "ATM" || trnType === "POS") {
+      txType = "expense";
+    } else {
+      // Fallback to sign-based detection
+      txType = amount >= 0 ? "income" : "expense";
+    }
 
     transactions.push({
       date,
       amount,
       description: memo.trim(),
-      type: amount >= 0 ? "income" : "expense",
+      type: txType,
       bank_slug: detectBankFromOFX(content),
       external_id: fitId || generateExternalId(date, amount, memo),
     });

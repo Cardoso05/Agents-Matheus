@@ -49,20 +49,16 @@ export function KpiCards({ userId }: { userId: string }) {
 
       const income = (currentTx.data || [])
         .filter((t) => t.type === "income")
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-      const expenses = Math.abs(
-        (currentTx.data || [])
-          .filter((t) => t.type === "expense")
-          .reduce((sum, t) => sum + Number(t.amount), 0)
-      );
+        .reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0);
+      const expenses = (currentTx.data || [])
+        .filter((t) => t.type === "expense")
+        .reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0);
       const prevIncome = (prevTx.data || [])
         .filter((t) => t.type === "income")
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-      const prevExpenses = Math.abs(
-        (prevTx.data || [])
-          .filter((t) => t.type === "expense")
-          .reduce((sum, t) => sum + Number(t.amount), 0)
-      );
+        .reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0);
+      const prevExpenses = (prevTx.data || [])
+        .filter((t) => t.type === "expense")
+        .reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0);
       const totalDebt = (debts.data || []).reduce(
         (sum, d) => sum + Number(d.current_balance),
         0

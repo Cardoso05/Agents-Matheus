@@ -12,6 +12,7 @@ interface PayoffPlan {
   debts: PayoffDebtPlan[];
   total_interest_saved: number;
   estimated_debt_free_date: string;
+  warning?: string;
 }
 
 interface PayoffDebtPlan {
@@ -37,6 +38,13 @@ export function calculatePayoffPlan(
       total_interest_saved: 0,
       estimated_debt_free_date: new Date().toISOString(),
     };
+  }
+
+  // Check if monthly available covers all minimums
+  const totalMinimums = debts.reduce((s, d) => s + d.minimum_payment, 0);
+  let warning: string | undefined;
+  if (monthlyAvailable < totalMinimums) {
+    warning = `Valor mensal (${monthlyAvailable.toFixed(2)}) é menor que a soma dos pagamentos mínimos (${totalMinimums.toFixed(2)}). Alguns mínimos não serão cobertos, causando crescimento de juros.`;
   }
 
   // Sort debts
@@ -69,11 +77,11 @@ export function calculatePayoffPlan(
     const currentMonth = new Date(now.getFullYear(), now.getMonth() + month, 1);
     const monthStr = currentMonth.toISOString().split("T")[0];
 
-    // Apply interest
+    // Apply interest (round to cents to avoid floating point drift)
     for (let i = 0; i < balances.length; i++) {
       if (balances[i] > 0) {
-        const interest = balances[i] * rates[i];
-        balances[i] += interest;
+        const interest = Math.round(balances[i] * rates[i] * 100) / 100;
+        balances[i] = Math.round((balances[i] + interest) * 100) / 100;
         debtPlans[i].total_interest += interest;
       }
     }
@@ -131,8 +139,9 @@ export function calculatePayoffPlan(
     method,
     monthly_available: monthlyAvailable,
     debts: debtPlans,
-    total_interest_saved: Math.max(0, minOnlyInterest - planInterest),
+    total_interest_saved: Math.round(Math.max(0, minOnlyInterest - planInterest) * 100) / 100,
     estimated_debt_free_date: lastPayoff?.payoff_date || "",
+    warning,
   };
 }
 
@@ -143,10 +152,11 @@ function calculateMinimumOnlyInterest(debts: Debt[]): number {
   for (const debt of debts) {
     let balance = debt.current_balance;
     for (let m = 0; m < MAX_MONTHS && balance > 0; m++) {
-      const interest = balance * debt.interest_rate;
-      balance += interest;
+      const interest = Math.round(balance * debt.interest_rate * 100) / 100;
+      balance = Math.round((balance + interest) * 100) / 100;
       totalInterest += interest;
-      balance -= Math.min(debt.minimum_payment, balance);
+      const payment = Math.min(debt.minimum_payment, balance);
+      balance = Math.round((balance - payment) * 100) / 100;
     }
   }
 

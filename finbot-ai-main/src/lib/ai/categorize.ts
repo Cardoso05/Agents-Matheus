@@ -59,10 +59,12 @@ export async function categorizeTransactions(
   const results: CategorizedResult[] = [];
   const remaining: RawTransaction[] = [];
 
-  // Step 1: Apply user rules
+  // Step 1: Apply user rules (skip patterns shorter than 3 chars to avoid false matches)
   for (const tx of transactions) {
     const desc = tx.description.toLowerCase();
-    const rule = userRules.find((r) => desc.includes(r.pattern.toLowerCase()));
+    const rule = userRules.find(
+      (r) => r.pattern.length >= 3 && desc.includes(r.pattern.toLowerCase())
+    );
     if (rule) {
       results.push({
         external_id: tx.external_id,
