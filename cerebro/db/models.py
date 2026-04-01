@@ -132,6 +132,7 @@ def deletar_pendencia(id: int, conn=None) -> bool:
     pendencia = get_pendencia(id, conn)
     if not pendencia:
         return False
+    conn.execute("UPDATE historico SET pendencia_id = NULL WHERE pendencia_id = ?", (id,))
     conn.execute("DELETE FROM pendencias WHERE id = ?", (id,))
     conn.commit()
     return True

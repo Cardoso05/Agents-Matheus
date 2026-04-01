@@ -111,6 +111,7 @@ def get_lancamento(id: int, conn=None) -> dict | None:
 
 def deletar_lancamento(id: int, conn=None) -> bool:
     conn = conn or get_connection()
+    conn.execute("UPDATE compromissos SET lancamento_id = NULL WHERE lancamento_id = ?", (id,))
     cursor = conn.execute("DELETE FROM lancamentos WHERE id = ?", (id,))
     conn.commit()
     return cursor.rowcount > 0

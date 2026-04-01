@@ -185,6 +185,19 @@ class TestCrudLancamentos:
         assert deletar_lancamento(l["id"], conn=conn) is True
         assert get_lancamento(l["id"], conn=conn) is None
 
+    def test_deletar_lancamento_com_compromisso(self):
+        """Delete lancamento referenciado por compromisso não deve falhar."""
+        from cerebro.db.models_finance import (
+            criar_lancamento, criar_compromisso, pagar_compromisso,
+            deletar_lancamento, get_lancamento,
+        )
+        conn = get_test_connection()
+        l = criar_lancamento("saida", 350.0, "internet", "infra", conn=conn)
+        c = criar_compromisso("pagar", "Internet", 350, "2026-04-05", conn=conn)
+        pagar_compromisso(c["id"], lancamento_id=l["id"], conn=conn)
+        assert deletar_lancamento(l["id"], conn=conn) is True
+        assert get_lancamento(l["id"], conn=conn) is None
+
 
 class TestCrudCompromissos:
     """CRUD de compromissos."""

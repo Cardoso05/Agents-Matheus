@@ -3,7 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -146,23 +146,28 @@ def api_criar_pendencia(p: NovaPendencia):
 def api_concluir_pendencia(id: int):
     result = models.concluir_pendencia(id)
     if not result:
-        return {"error": "Pendência não encontrada"}
+        raise HTTPException(status_code=404, detail="Pendência não encontrada")
     return result
 
 
 @app.delete("/api/pendencias/{id}")
 def api_deletar_pendencia(id: int):
-    ok = models.deletar_pendencia(id)
-    if not ok:
-        return {"error": "Pendência não encontrada"}
-    return {"ok": True, "id": id}
+    try:
+        ok = models.deletar_pendencia(id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Pendência não encontrada")
+        return {"ok": True, "id": id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.put("/api/pendencias/{id}")
 def api_atualizar_pendencia(id: int, campos: dict):
     result = models.atualizar_pendencia(id, **campos)
     if not result:
-        return {"error": "Pendência não encontrada"}
+        raise HTTPException(status_code=404, detail="Pendência não encontrada")
     return result
 
 
@@ -236,10 +241,15 @@ def api_criar_lancamento(l: NovoLancamento):
 
 @app.delete("/api/lancamentos/{id}")
 def api_deletar_lancamento(id: int):
-    ok = models_finance.deletar_lancamento(id)
-    if not ok:
-        return {"error": "Lançamento não encontrado"}
-    return {"ok": True, "id": id}
+    try:
+        ok = models_finance.deletar_lancamento(id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+        return {"ok": True, "id": id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/compromissos")

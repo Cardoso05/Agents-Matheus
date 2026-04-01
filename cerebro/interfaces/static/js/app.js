@@ -1,5 +1,19 @@
 /* Cérebro — app.js (external, CSP-compliant) */
 
+// ── Helpers ─────────────────────────────────────────────────
+
+function apiCall(url, options) {
+    return fetch(url, options)
+        .then(function (r) {
+            if (!r.ok) {
+                return r.json().then(function (e) {
+                    throw new Error(e.detail || 'Erro ' + r.status);
+                });
+            }
+            return r.json();
+        });
+}
+
 // ── Markdown rendering ──────────────────────────────────────
 
 function renderMarkdown(text) {
@@ -33,9 +47,9 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('[data-concluir]').forEach(function (btn) {
         btn.addEventListener('click', function () {
             var id = this.getAttribute('data-concluir');
-            fetch('/api/pendencias/' + id + '/concluir', { method: 'PUT' })
-                .then(function (r) { return r.json(); })
-                .then(function () { location.reload(); });
+            apiCall('/api/pendencias/' + id + '/concluir', { method: 'PUT' })
+                .then(function () { location.reload(); })
+                .catch(function (err) { alert('Erro ao concluir: ' + err.message); });
         });
     });
 
@@ -44,9 +58,9 @@ document.addEventListener('DOMContentLoaded', function () {
         btn.addEventListener('click', function () {
             var id = this.getAttribute('data-excluir-pendencia');
             if (!confirm('Excluir tarefa #' + id + '?')) return;
-            fetch('/api/pendencias/' + id, { method: 'DELETE' })
-                .then(function (r) { return r.json(); })
-                .then(function () { location.reload(); });
+            apiCall('/api/pendencias/' + id, { method: 'DELETE' })
+                .then(function () { location.reload(); })
+                .catch(function (err) { alert('Erro ao excluir: ' + err.message); });
         });
     });
 
@@ -63,12 +77,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 prazo: form.prazo.value || null,
                 responsavel: form.responsavel.value || 'matheus'
             };
-            fetch('/api/pendencias', {
+            apiCall('/api/pendencias', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
-            }).then(function (r) { return r.json(); })
-              .then(function () { location.reload(); });
+            }).then(function () { location.reload(); })
+              .catch(function (err) { alert('Erro ao criar: ' + err.message); });
         });
     }
 
@@ -85,12 +99,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 duracao_minutos: parseInt(form.duracao_minutos.value) || 60,
                 projeto: form.projeto.value || null
             };
-            fetch('/api/eventos', {
+            apiCall('/api/eventos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
-            }).then(function (r) { return r.json(); })
-              .then(function () { location.reload(); });
+            }).then(function () { location.reload(); })
+              .catch(function (err) { alert('Erro ao criar evento: ' + err.message); });
         });
     }
 
@@ -105,12 +119,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 instrucoes: form.instrucoes.value,
                 projeto: form.projeto.value || null
             };
-            fetch('/api/jobs', {
+            apiCall('/api/jobs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
-            }).then(function (r) { return r.json(); })
-              .then(function () { location.reload(); });
+            }).then(function () { location.reload(); })
+              .catch(function (err) { alert('Erro ao criar job: ' + err.message); });
         });
     }
 
@@ -128,12 +142,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 projeto: form.projeto.value,
                 data: form.data.value || null
             };
-            fetch('/api/lancamentos', {
+            apiCall('/api/lancamentos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
-            }).then(function (r) { return r.json(); })
-              .then(function () { location.reload(); });
+            }).then(function () { location.reload(); })
+              .catch(function (err) { alert('Erro ao registrar: ' + err.message); });
         });
     }
 
@@ -142,9 +156,9 @@ document.addEventListener('DOMContentLoaded', function () {
         btn.addEventListener('click', function () {
             var id = this.getAttribute('data-excluir-lancamento');
             if (!confirm('Excluir lançamento #' + id + '?')) return;
-            fetch('/api/lancamentos/' + id, { method: 'DELETE' })
-                .then(function (r) { return r.json(); })
-                .then(function () { location.reload(); });
+            apiCall('/api/lancamentos/' + id, { method: 'DELETE' })
+                .then(function () { location.reload(); })
+                .catch(function (err) { alert('Erro ao excluir: ' + err.message); });
         });
     });
 });

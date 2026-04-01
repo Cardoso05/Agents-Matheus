@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS historico (
     acao            TEXT NOT NULL,
     detalhes        TEXT,
     timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (pendencia_id) REFERENCES pendencias(id)
+    FOREIGN KEY (pendencia_id) REFERENCES pendencias(id) ON DELETE SET NULL
 );
 
 -- Fatos permanentes do projeto
@@ -217,7 +217,7 @@ CREATE TABLE IF NOT EXISTS compromissos (
     lancamento_id   INTEGER,
     notas           TEXT,
     criado_em       DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (lancamento_id) REFERENCES lancamentos(id)
+    FOREIGN KEY (lancamento_id) REFERENCES lancamentos(id) ON DELETE SET NULL
 );
 
 -- Regras de categorização automática

@@ -152,6 +152,32 @@ class TestConcluirTarefa:
         assert "Próxima sugerida" in result
 
 
+class TestDeletarPendencia:
+    """Deletar pendências com dependências no histórico."""
+
+    def test_delete_com_historico(self, conn):
+        """Pendência concluída tem historico — delete não deve falhar."""
+        # Concluir cria entrada no historico
+        models.concluir_pendencia(1, conn=conn)
+        # Re-criar pra ter uma pendência com historico
+        p = models.criar_pendencia("teste delete", "wipr", conn=conn)
+        models.atualizar_pendencia(p["id"], notas="atualizado", conn=conn)
+        result = models.deletar_pendencia(p["id"], conn=conn)
+        assert result is True
+        assert models.get_pendencia(p["id"], conn=conn) is None
+
+    def test_delete_delegada_com_historico(self, conn):
+        """Pendência delegada tem historico — delete não deve falhar."""
+        p = models.criar_pendencia("teste delegação", "wipr", conn=conn)
+        models.delegar_tarefa(p["id"], "Victor", conn=conn)
+        result = models.deletar_pendencia(p["id"], conn=conn)
+        assert result is True
+
+    def test_delete_inexistente(self, conn):
+        result = models.deletar_pendencia(999, conn=conn)
+        assert result is False
+
+
 class TestResumoSemanal:
 
     def test_retorna_metricas(self, conn):
