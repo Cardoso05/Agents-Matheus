@@ -18,11 +18,19 @@ from cerebro.core.deterministic import (
     concluir_tarefa,
     criar_tarefa,
     delegacoes_pendentes,
+    eventos_semana,
     pendencias_projeto,
     projetos_parados,
     resumo_semanal,
     status_geral,
     top_n_do_dia,
+)
+from cerebro.finance.deterministic import (
+    registrar_gasto_rapido,
+    registrar_receita_rapida,
+    resumo_financeiro,
+    contas_vencendo,
+    contas_vencidas,
 )
 from cerebro.db.setup import init_db
 
@@ -41,7 +49,7 @@ def _load_authorized_users():
             AUTHORIZED_USERS.add(int(uid))
 
 
-# Mapa de funções determinísticas
+# Mapa de funções determinísticas (deve ser idêntico ao main.py)
 DETERMINISTIC_FUNCS = {
     "status_geral": status_geral,
     "top_n_do_dia": top_n_do_dia,
@@ -52,6 +60,12 @@ DETERMINISTIC_FUNCS = {
     "criar_tarefa": criar_tarefa,
     "concluir_tarefa": concluir_tarefa,
     "resumo_semanal": resumo_semanal,
+    "eventos_semana": eventos_semana,
+    "registrar_gasto": registrar_gasto_rapido,
+    "registrar_receita": registrar_receita_rapida,
+    "resumo_financeiro": resumo_financeiro,
+    "contas_vencendo": contas_vencendo,
+    "contas_vencidas": contas_vencidas,
 }
 
 
