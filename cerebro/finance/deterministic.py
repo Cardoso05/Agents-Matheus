@@ -7,7 +7,14 @@ from cerebro.db.setup import get_connection
 
 
 def resumo_financeiro(mes: str | None = None, projeto: str | None = None, conn=None) -> str:
-    """Entradas vs saídas, por categoria, saldo do mês."""
+    """Entradas vs saídas, por categoria, saldo do mês. Usa Supabase se configurado."""
+    # Tentar Supabase primeiro
+    try:
+        from cerebro.integrations.supabase_client import is_configured, resumo_mes
+        if is_configured() and not conn:  # conn = teste com in-memory DB
+            return _resumo_from_supabase(mes)
+    except Exception:
+        pass  # Fallback pro SQLite
     conn = conn or get_connection()
     if mes is None:
         mes = datetime.now().strftime("%Y-%m")
@@ -201,23 +208,28 @@ def registrar_gasto_rapido(valor: float, descricao: str, projeto: str | None = N
     from cerebro.db.models_finance import criar_lancamento
 
     cat = categorizar(descricao, projeto_hint=projeto, conn=conn)
+    projeto_final = cat["projeto"] or "pessoal"
+    categoria_final = cat["categoria"]
 
     lancamento = criar_lancamento(
         tipo="saida",
         valor=valor,
         descricao=descricao,
-        categoria=cat["categoria"],
-        projeto=cat["projeto"] or "pessoal",
+        categoria=categoria_final,
+        projeto=projeto_final,
         data=data,
         origem="texto",
         conn=conn,
     )
 
-    emoji_cat = _emoji_categoria(cat["categoria"])
+    # Dual-write: Supabase (FinBot)
+    _sync_to_supabase("saida", valor, descricao, categoria_final, data, projeto_final)
+
+    emoji_cat = _emoji_categoria(categoria_final)
     return (
         f"✅ Gasto registrado: #{lancamento['id']}\n"
         f"  {emoji_cat} R${valor:,.2f} — {descricao}\n"
-        f"  Categoria: {cat['categoria']} | Projeto: {(cat['projeto'] or 'pessoal').upper()}"
+        f"  Categoria: {categoria_final} | Projeto: {projeto_final.upper()}"
     )
 
 
@@ -227,23 +239,72 @@ def registrar_receita_rapida(valor: float, descricao: str, projeto: str | None =
     from cerebro.db.models_finance import criar_lancamento
 
     cat = categorizar(descricao, projeto_hint=projeto, conn=conn)
+    categoria_final = cat["categoria"] if cat["categoria"] != "outros" else "projeto_receita"
+    projeto_final = cat["projeto"] or projeto or "pessoal"
 
     lancamento = criar_lancamento(
         tipo="entrada",
         valor=valor,
         descricao=descricao,
-        categoria=cat["categoria"] if cat["categoria"] != "outros" else "projeto_receita",
-        projeto=cat["projeto"] or projeto or "pessoal",
+        categoria=categoria_final,
+        projeto=projeto_final,
         data=data,
         origem="texto",
         conn=conn,
     )
 
+    # Dual-write: Supabase (FinBot)
+    _sync_to_supabase("entrada", valor, descricao, categoria_final, data, projeto_final)
+
     return (
         f"✅ Receita registrada: #{lancamento['id']}\n"
         f"  💰 R${valor:,.2f} — {descricao}\n"
-        f"  Projeto: {(cat['projeto'] or projeto or 'pessoal').upper()}"
+        f"  Projeto: {projeto_final.upper()}"
     )
+
+
+def _sync_to_supabase(tipo: str, valor: float, descricao: str, categoria: str, data: str | None, projeto: str):
+    """Tenta inserir no Supabase. Falha silenciosa se não configurado."""
+    try:
+        from cerebro.integrations.supabase_client import is_configured, inserir_transacao
+        if is_configured():
+            inserir_transacao(
+                tipo=tipo, valor=valor, descricao=descricao,
+                categoria_cerebro=categoria, data=data, projeto=projeto,
+            )
+    except Exception:
+        pass  # Não falhar o fluxo principal por causa do Supabase
+
+
+def _resumo_from_supabase(mes: str | None = None) -> str:
+    """Gera resumo financeiro a partir do Supabase."""
+    from cerebro.integrations.supabase_client import resumo_mes
+    if mes is None:
+        mes = datetime.now().strftime("%Y-%m")
+
+    dados = resumo_mes(mes=mes)
+    if not dados:
+        return "Nenhum dado financeiro encontrado no período."
+
+    entradas = dados["entradas"]
+    saidas = dados["saidas"]
+    saldo = dados["saldo"]
+    emoji_saldo = "🟢" if saldo >= 0 else "🚨"
+
+    mes_label = datetime.strptime(mes, "%Y-%m").strftime("%B %Y").capitalize()
+    lines = [f"💰 **Resumo Financeiro — {mes_label}**\n"]
+    lines.append(f"  📈 Entradas: R${entradas:,.2f}")
+    lines.append(f"  📉 Saídas:   R${saidas:,.2f}")
+    lines.append(f"  {emoji_saldo} Saldo:    R${saldo:,.2f}\n")
+
+    if dados["por_categoria"]:
+        lines.append("**Saídas por categoria:**")
+        for c in dados["por_categoria"]:
+            pct = (c["total"] / saidas * 100) if saidas > 0 else 0
+            bar = "█" * int(pct / 10) + "░" * (10 - int(pct / 10))
+            lines.append(f"  {c['categoria']:.<20s} R${c['total']:>10,.2f}  {bar} {pct:.0f}%")
+
+    return "\n".join(lines)
 
 
 def _emoji_categoria(categoria: str) -> str:

@@ -1,5 +1,6 @@
 """Dashboard Web — Central de Controle (FastAPI)."""
 
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -29,6 +30,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 app = FastAPI(title="Cérebro - Central de Controle")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+templates.env.globals["finbot_url"] = os.getenv("FINBOT_URL", "")
 
 # Garantir DB ao iniciar
 init_db()
