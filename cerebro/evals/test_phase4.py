@@ -122,14 +122,23 @@ class TestNewToolHandlers:
         jobs = jobs_db.listar_jobs(conn=conn)
         assert len(jobs) == 1
 
-    def test_ler_arquivo_existente(self, tmp_path):
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("conteúdo de teste")
+    def test_ler_arquivo_existente(self):
         from cerebro.core.agent import _handle_ler_arquivo
-        result = _handle_ler_arquivo(str(test_file))
-        assert "conteúdo de teste" in result
+        # Use a file inside the project directory
+        result = _handle_ler_arquivo("cerebro/__init__.py")
+        assert "Acesso negado" not in result
 
     def test_ler_arquivo_inexistente(self):
         from cerebro.core.agent import _handle_ler_arquivo
-        result = _handle_ler_arquivo("/caminho/que/nao/existe.txt")
+        result = _handle_ler_arquivo("cerebro/nao_existe_xyz.py")
         assert "não encontrado" in result
+
+    def test_ler_arquivo_path_traversal_blocked(self):
+        from cerebro.core.agent import _handle_ler_arquivo
+        result = _handle_ler_arquivo("../../etc/passwd")
+        assert "Acesso negado" in result
+
+    def test_ler_arquivo_env_blocked(self):
+        from cerebro.core.agent import _handle_ler_arquivo
+        result = _handle_ler_arquivo(".env")
+        assert "Acesso negado" in result

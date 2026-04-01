@@ -4,11 +4,11 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from cerebro.db.setup import init_db
 from cerebro.db import models, jobs as jobs_db
@@ -34,6 +34,19 @@ templates.env.globals["finbot_url"] = os.getenv("FINBOT_URL", "")
 
 # Garantir DB ao iniciar
 init_db()
+
+# ── API Key Auth (protege endpoints de escrita) ─────────────
+
+API_KEY = os.getenv("CEREBRO_API_KEY", "")
+
+
+def _verify_api_key(request: Request):
+    """Verifica API key no header ou cookie. Pages HTML são protegidas pelo nginx basic auth."""
+    if not API_KEY:
+        return  # Dev mode: sem key configurada, aceita tudo
+    key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
+    if key != API_KEY:
+        raise HTTPException(status_code=401, detail="API key inválida")
 
 
 # ── Pydantic Models ─────────────────────────────────────────
@@ -84,8 +97,28 @@ class NovoCompromisso(BaseModel):
     parcela_total: int | None = None
 
 
+class AtualizarPendencia(BaseModel):
+    tarefa: str | None = Field(None, max_length=500)
+    projeto: str | None = Field(None, max_length=50)
+    prioridade: int | None = None
+    prazo: str | None = None
+    status: str | None = None
+    responsavel: str | None = Field(None, max_length=100)
+    delegado_para: str | None = Field(None, max_length=100)
+    notas: str | None = Field(None, max_length=2000)
+
+
+class AtualizarEvento(BaseModel):
+    titulo: str | None = Field(None, max_length=200)
+    data: str | None = None
+    hora: str | None = None
+    duracao_minutos: int | None = None
+    projeto: str | None = Field(None, max_length=50)
+    notas: str | None = Field(None, max_length=2000)
+
+
 class Mensagem(BaseModel):
-    texto: str
+    texto: str = Field(..., max_length=2000)
 
 
 # ── API Endpoints ───────────────────────────────────────────
@@ -136,7 +169,7 @@ def api_pendencias(
     return models.listar_pendencias(projeto=projeto, status=status, responsavel=responsavel)
 
 
-@app.post("/api/pendencias")
+@app.post("/api/pendencias", dependencies=[Depends(_verify_api_key)])
 def api_criar_pendencia(p: NovaPendencia):
     return models.criar_pendencia(
         tarefa=p.tarefa, projeto=p.projeto, prioridade=p.prioridade,
@@ -144,7 +177,7 @@ def api_criar_pendencia(p: NovaPendencia):
     )
 
 
-@app.put("/api/pendencias/{id}/concluir")
+@app.put("/api/pendencias/{id}/concluir", dependencies=[Depends(_verify_api_key)])
 def api_concluir_pendencia(id: int):
     result = models.concluir_pendencia(id)
     if not result:
@@ -152,7 +185,7 @@ def api_concluir_pendencia(id: int):
     return result
 
 
-@app.delete("/api/pendencias/{id}")
+@app.delete("/api/pendencias/{id}", dependencies=[Depends(_verify_api_key)])
 def api_deletar_pendencia(id: int):
     try:
         ok = models.deletar_pendencia(id)
@@ -165,8 +198,9 @@ def api_deletar_pendencia(id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.put("/api/pendencias/{id}")
-def api_atualizar_pendencia(id: int, campos: dict):
+@app.put("/api/pendencias/{id}", dependencies=[Depends(_verify_api_key)])
+def api_atualizar_pendencia(id: int, p: AtualizarPendencia):
+    campos = p.model_dump(exclude_none=True)
     result = models.atualizar_pendencia(id, **campos)
     if not result:
         raise HTTPException(status_code=404, detail="Pendência não encontrada")
@@ -182,7 +216,7 @@ def api_eventos(
     return calendar.listar_eventos(data_inicio=data_inicio, data_fim=data_fim, projeto=projeto)
 
 
-@app.post("/api/eventos")
+@app.post("/api/eventos", dependencies=[Depends(_verify_api_key)])
 def api_criar_evento(e: NovoEvento):
     return calendar.criar_evento(
         titulo=e.titulo, data=e.data, hora=e.hora,
@@ -190,15 +224,16 @@ def api_criar_evento(e: NovoEvento):
     )
 
 
-@app.put("/api/eventos/{id}")
-def api_atualizar_evento(id: int, campos: dict):
+@app.put("/api/eventos/{id}", dependencies=[Depends(_verify_api_key)])
+def api_atualizar_evento(id: int, e: AtualizarEvento):
+    campos = e.model_dump(exclude_none=True)
     result = calendar.atualizar_evento(id, **campos)
     if not result:
         raise HTTPException(status_code=404, detail="Evento não encontrado")
     return result
 
 
-@app.delete("/api/eventos/{id}")
+@app.delete("/api/eventos/{id}", dependencies=[Depends(_verify_api_key)])
 def api_deletar_evento(id: int):
     try:
         ok = calendar.deletar_evento(id)
@@ -221,7 +256,7 @@ def api_job_detail(id: str):
     return jobs_db.get_job(id)
 
 
-@app.post("/api/jobs")
+@app.post("/api/jobs", dependencies=[Depends(_verify_api_key)])
 def api_criar_job(j: NovoJob):
     return jobs_db.criar_job(
         tipo=j.tipo, instrucoes=j.instrucoes,
@@ -254,7 +289,7 @@ def api_lancamentos(
     )
 
 
-@app.post("/api/lancamentos")
+@app.post("/api/lancamentos", dependencies=[Depends(_verify_api_key)])
 def api_criar_lancamento(l: NovoLancamento):
     return models_finance.criar_lancamento(
         tipo=l.tipo, valor=l.valor, descricao=l.descricao,
@@ -262,7 +297,7 @@ def api_criar_lancamento(l: NovoLancamento):
     )
 
 
-@app.delete("/api/lancamentos/{id}")
+@app.delete("/api/lancamentos/{id}", dependencies=[Depends(_verify_api_key)])
 def api_deletar_lancamento(id: int):
     try:
         ok = models_finance.deletar_lancamento(id)
@@ -284,7 +319,7 @@ def api_compromissos(
     return models_finance.listar_compromissos(tipo=tipo, status=status, projeto=projeto)
 
 
-@app.post("/api/compromissos")
+@app.post("/api/compromissos", dependencies=[Depends(_verify_api_key)])
 def api_criar_compromisso(c: NovoCompromisso):
     return models_finance.criar_compromisso(
         tipo=c.tipo, descricao=c.descricao, valor=c.valor,
@@ -293,7 +328,7 @@ def api_criar_compromisso(c: NovoCompromisso):
     )
 
 
-@app.post("/api/mensagem")
+@app.post("/api/mensagem", dependencies=[Depends(_verify_api_key)])
 def api_mensagem(m: Mensagem):
     from cerebro.main import processar_mensagem
     response = processar_mensagem(m.texto)

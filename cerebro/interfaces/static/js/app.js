@@ -14,10 +14,18 @@ function apiCall(url, options) {
         });
 }
 
-// ── Markdown rendering ──────────────────────────────────────
+// ── Sanitize + Markdown rendering ───────────────────────────
+
+function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
 function renderMarkdown(text) {
-    return text
+    // Escape HTML first to prevent XSS, then apply markdown formatting
+    var safe = escapeHtml(text);
+    return safe
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.+?)\*/g, '<em>$1</em>')
         .replace(/^### (.+)$/gm, '<h4>$1</h4>')

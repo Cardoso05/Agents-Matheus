@@ -5,7 +5,7 @@ import time
 
 import anthropic
 
-from cerebro.core.config import MODEL, SKILLS_DIR
+from cerebro.core.config import MODEL, ROOT_DIR, SKILLS_DIR
 from cerebro.db import models, jobs as jobs_db, models_finance
 from cerebro.db.metricas import registrar_metrica
 from cerebro.db.conversas import formatar_historico_para_prompt
@@ -532,8 +532,18 @@ def _handle_buscar_web(query, num_results=5, **_):
 
 
 def _handle_ler_arquivo(path, **_):
+    import os
+    # Segurança: restringir ao diretório do projeto
+    base_dir = os.path.normpath(str(ROOT_DIR))
+    full_path = os.path.normpath(os.path.join(base_dir, path))
+    # Bloquear path traversal e arquivos sensíveis
+    if not full_path.startswith(base_dir):
+        return "❌ Acesso negado: caminho fora do projeto."
+    blocked = [".env", ".git/", "credentials", "token.json", ".ssh", "id_rsa"]
+    if any(b in full_path.lower() for b in blocked):
+        return "❌ Acesso negado: arquivo sensível."
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(full_path, "r", encoding="utf-8") as f:
             content = f.read()
         if len(content) > 50000:
             content = content[:50000] + "\n\n... (arquivo truncado)"
