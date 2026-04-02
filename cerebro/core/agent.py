@@ -6,6 +6,11 @@ import time
 import anthropic
 
 from cerebro.core.config import MODEL, ROOT_DIR, SKILLS_DIR
+from cerebro.core.enums import (
+    CategoriaFinanceira, EMOJI_CATEGORIA, EMOJI_STATUS_COMPROMISSO,
+    EMOJI_STATUS_JOB, ProjetoSlug, StatusCompromisso, StatusJob,
+    StatusPendencia, TipoCompromisso, TipoJob, TipoLancamento,
+)
 from cerebro.db import models, jobs as jobs_db, models_finance
 from cerebro.db.metricas import registrar_metrica
 from cerebro.db.conversas import formatar_historico_para_prompt
@@ -59,6 +64,17 @@ IMPORTANTE:
 - Não conclua tarefas sem confirmação explícita do Matheus.
 - Jobs de background são para trabalho real (revisão, pesquisa, relatório), NÃO para consultas simples.
 - Use buscar_web para pesquisas rápidas. Para pesquisas complexas, crie um job de pesquisa.
+
+DURAÇÃO:
+- Pendências NÃO têm duração — nunca pergunte "quanto tempo vai levar?" ao criar tarefas.
+- Eventos de calendário usam 60 minutos como padrão — só pergunte duração se o usuário mencionar tempo diferente.
+
+PENDÊNCIA vs EVENTO DE CALENDÁRIO:
+- "Preciso fazer X" (sem horário) → criar_pendencia APENAS
+- "Reunião terça 14h" (compromisso agendado) → criar_evento_calendar APENAS
+- "Apresentação sexta 10h, preciso preparar slides" → criar_evento_calendar (evento) + criar_pendencia (preparação)
+- Na dúvida → criar_pendencia. Só crie evento se houver data + hora específicos.
+- Data sem hora = pendência com prazo, NÃO evento.
 """
 
 # ── Tool Definitions ────────────────────────────────────────
@@ -73,7 +89,7 @@ TOOLS = [
                 "tarefa": {"type": "string", "description": "Descrição da tarefa"},
                 "projeto": {
                     "type": "string",
-                    "description": "Slug do projeto (wipr, erp, engenharia, gruta, faculdade)",
+                    "description": f"Slug do projeto ({', '.join(ProjetoSlug)})",
                 },
                 "prioridade": {
                     "type": "integer",
@@ -114,7 +130,7 @@ TOOLS = [
                 "projeto": {"type": "string", "description": "Novo projeto"},
                 "prioridade": {"type": "integer", "description": "Nova prioridade (1-5)"},
                 "prazo": {"type": "string", "description": "Novo prazo (YYYY-MM-DD)"},
-                "status": {"type": "string", "description": "Novo status (pendente, concluida, cancelada)"},
+                "status": {"type": "string", "description": f"Novo status ({', '.join(StatusPendencia)})"},
                 "responsavel": {"type": "string", "description": "Novo responsável"},
                 "delegado_para": {"type": "string", "description": "Delegar para alguém"},
                 "notas": {"type": "string", "description": "Novas notas"},
@@ -129,7 +145,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "projeto": {"type": "string", "description": "Filtrar por projeto"},
-                "status": {"type": "string", "description": "Filtrar por status (pendente, concluida, cancelada)"},
+                "status": {"type": "string", "description": f"Filtrar por status ({', '.join(StatusPendencia)})"},
                 "responsavel": {"type": "string", "description": "Filtrar por responsável"},
             },
             "required": [],
@@ -193,7 +209,7 @@ TOOLS = [
             "properties": {
                 "tipo": {
                     "type": "string",
-                    "description": "Tipo: revisao_codigo, pesquisa, geracao_conteudo, analise_dados, auditoria, relatorio",
+                    "description": f"Tipo: {', '.join(TipoJob)}",
                 },
                 "projeto": {"type": "string", "description": "Slug do projeto"},
                 "instrucoes": {"type": "string", "description": "Instruções detalhadas para o worker"},
@@ -219,7 +235,7 @@ TOOLS = [
             "properties": {
                 "status": {
                     "type": "string",
-                    "description": "Filtrar por status: pendente, executando, concluido, erro",
+                    "description": f"Filtrar por status: {', '.join(StatusJob)}",
                 },
                 "projeto": {"type": "string", "description": "Filtrar por projeto"},
             },
@@ -320,11 +336,11 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "tipo": {"type": "string", "description": "entrada ou saida"},
+                "tipo": {"type": "string", "description": f"{', '.join(TipoLancamento)}"},
                 "valor": {"type": "number", "description": "Valor em reais"},
                 "descricao": {"type": "string", "description": "Descrição do lançamento"},
-                "categoria": {"type": "string", "description": "alimentacao, transporte, material, servico, infra, marketing, assinatura, educacao, saude, projeto_receita, servico_receita, outros"},
-                "projeto": {"type": "string", "description": "Projeto (pessoal, engenharia, wipr, erp, gruta). Default: pessoal"},
+                "categoria": {"type": "string", "description": f"{', '.join(CategoriaFinanceira)}"},
+                "projeto": {"type": "string", "description": f"Projeto ({', '.join(ProjetoSlug)}). Default: pessoal"},
                 "data": {"type": "string", "description": "Data YYYY-MM-DD. Default: hoje"},
             },
             "required": ["tipo", "valor", "descricao", "categoria"],
@@ -362,7 +378,7 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "tipo": {"type": "string", "description": "pagar ou receber"},
+                "tipo": {"type": "string", "description": f"{', '.join(TipoCompromisso)}"},
                 "descricao": {"type": "string", "description": "Descrição do compromisso"},
                 "valor": {"type": "number", "description": "Valor em reais"},
                 "vencimento": {"type": "string", "description": "Data de vencimento YYYY-MM-DD"},
@@ -380,8 +396,8 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "tipo": {"type": "string", "description": "pagar ou receber"},
-                "status": {"type": "string", "description": "aberto, pago, vencido, cancelado"},
+                "tipo": {"type": "string", "description": f"{', '.join(TipoCompromisso)}"},
+                "status": {"type": "string", "description": f"{', '.join(StatusCompromisso)}"},
                 "projeto": {"type": "string", "description": "Filtrar por projeto"},
             },
             "required": [],
@@ -480,7 +496,7 @@ def _handle_consultar_jobs(status=None, projeto=None, **_):
         return "Nenhum job encontrado."
     lines = []
     for j in jobs:
-        emoji = {"pendente": "⏳", "executando": "🔄", "concluido": "✅", "erro": "❌"}.get(j["status"], "❓")
+        emoji = EMOJI_STATUS_JOB.get(j["status"], "❓")
         proj = f" [{j['projeto'].upper()}]" if j.get("projeto") else ""
         lines.append(f"{emoji} #{j['id']} ({j['tipo']}){proj} — {j['status']}")
         if j["status"] == "concluido" and j.get("resultado"):
@@ -599,7 +615,7 @@ def _handle_listar_compromissos(tipo=None, status=None, projeto=None, **_):
         return "Nenhum compromisso encontrado."
     lines = []
     for c in comps:
-        emoji = {"aberto": "⏳", "pago": "✅", "vencido": "🚨", "cancelado": "❌"}.get(c["status"], "❓")
+        emoji = EMOJI_STATUS_COMPROMISSO.get(c["status"], "❓")
         parcela = f" ({c['parcela_atual']}/{c['parcela_total']})" if c.get("parcela_total") else ""
         lines.append(f"{emoji} #{c['id']} {c['descricao']}{parcela} — R${c['valor']:,.2f} — vence {c['vencimento']} [{c['status']}]")
     return "\n".join(lines)
@@ -714,7 +730,7 @@ class AgenteGerente:
             pass  # Não falhar por causa de métricas
 
     def _build_prompt(self, projeto: str | None = None) -> str:
-        """Monta system prompt com base + skill + pendências + decisões."""
+        """Monta system prompt com base + skill + pendências + decisões + fatos."""
         parts = [SYSTEM_PROMPT_BASE]
 
         # Skill do projeto
@@ -737,6 +753,24 @@ class AgenteGerente:
             decisoes = models.consultar_decisoes(projeto, limite=5)
             if decisoes:
                 parts.append(f"\n── DECISÕES RECENTES ──\n{self._format_decisoes(decisoes)}")
+
+        # Fatos do projeto (memória estruturada)
+        if projeto:
+            fatos = models.listar_fatos(projeto)
+            if fatos:
+                fatos_text = "\n".join(
+                    f"  [{f['categoria'].upper()}] {f['fato']}" for f in fatos
+                )
+                parts.append(f"\n── FATOS DO PROJETO ──\n{fatos_text}")
+
+        # Contexto geral (fatos do projeto "geral" — sempre carregados)
+        if projeto != "geral":
+            fatos_geral = models.listar_fatos("geral")
+            if fatos_geral:
+                fatos_text = "\n".join(
+                    f"  [{f['categoria'].upper()}] {f['fato']}" for f in fatos_geral
+                )
+                parts.append(f"\n── CONTEXTO GERAL ──\n{fatos_text}")
 
         return "\n".join(parts)
 

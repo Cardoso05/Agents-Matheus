@@ -36,6 +36,18 @@
         .form-inline input, .form-inline select, .form-inline textarea { margin-bottom: 0; }
         .form-inline .form-group { display: flex; flex-direction: column; gap: 0.25rem; }
         .form-inline .form-group-wide { flex: 1; min-width: 200px; }
+        .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--pico-muted-border-color); }
+        .tabs a { padding: 0.5rem 1rem; text-decoration: none; color: var(--pico-muted-color); border-bottom: 2px solid transparent; margin-bottom: -2px; font-weight: 500; }
+        .tabs a.active { color: var(--pico-primary); border-bottom-color: var(--pico-primary); }
+        .tabs a:hover { color: var(--pico-primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .skill-editor { width: 100%; min-height: 300px; font-family: monospace; font-size: 0.85rem; resize: vertical; }
+        .fato-inativo { opacity: 0.5; text-decoration: line-through; }
+        .btn-toggle { background: #f39c12; color: white; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+        .btn-toggle:hover { background: #d68910; }
+        .btn-salvar { background: #3498db; color: white; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+        .btn-salvar:hover { background: #2980b9; }
         @media (max-width: 768px) {
             .grid-cards { grid-template-columns: 1fr 1fr; }
             .form-inline { flex-direction: column; }
@@ -60,6 +72,7 @@
             <li><a href="/calendario">Calendário</a></li>
             <li><a href="{{ finbot_url or '/financeiro' }}" {% if finbot_url %}target="_blank"{% endif %}>Financeiro</a></li>
             <li><a href="/jobs">Jobs</a></li>
+            <li><a href="/contexto">Contexto</a></li>
             <li><a href="/metricas">Métricas</a></li>
         </ul>
     </nav>

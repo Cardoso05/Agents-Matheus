@@ -87,9 +87,9 @@ rollback() {
     sleep 5
 
     if health_check; then
-        notify "warning" "⚠️ Deploy falhou — rollback OK\n\nCommit: $COMMIT_SHA\nMotivo: $reason\nSistema rodando na versão anterior"
+        notify "warning" "$(printf '⚠️ Deploy falhou — rollback OK\n\nCommit: %s\nMotivo: %s\nSistema rodando na versão anterior' "$COMMIT_SHA" "$reason")"
     else
-        notify "critical" "🚨 CRÍTICO: Deploy E rollback falharam!\n\nCommit: $COMMIT_SHA\nIntervenção manual necessária!"
+        notify "critical" "$(printf '🚨 CRÍTICO: Deploy E rollback falharam!\n\nCommit: %s\nIntervenção manual necessária!' "$COMMIT_SHA")"
     fi
     exit 1
 }
@@ -241,7 +241,7 @@ if health_check; then
     log "═══════════════════════════════════════"
     log "✅ Deploy concluído! (${DURATION}s)"
     log "═══════════════════════════════════════"
-    notify "success" "✅ Deploy concluído\n\nCommit: $COMMIT_SHA\nMsg: $COMMIT_MSG\nPor: $PUSHER\nDuração: ${DURATION}s"
+    notify "success" "$(printf '✅ Deploy concluído\n\nCommit: %s\nMsg: %s\nPor: %s\nDuração: %ss' "$COMMIT_SHA" "$COMMIT_MSG" "$PUSHER" "$DURATION")"
 else
     rollback "Health check falhou"
 fi

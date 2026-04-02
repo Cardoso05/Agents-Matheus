@@ -4,6 +4,7 @@ import json
 import uuid
 from datetime import datetime
 
+from cerebro.core.enums import TipoJob, validate_enum
 from cerebro.db.setup import get_connection
 
 
@@ -27,6 +28,7 @@ def criar_job(
     limites: dict | None = None,
     conn=None,
 ) -> dict:
+    tipo = validate_enum(tipo, TipoJob, "tipo")
     conn = conn or get_connection()
     job_id = f"job_{uuid.uuid4().hex[:8]}"
 
