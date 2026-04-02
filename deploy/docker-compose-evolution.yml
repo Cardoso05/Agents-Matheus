@@ -17,6 +17,11 @@ services:
       - DATABASE_SAVE_MESSAGE_UPDATE=true
       - DATABASE_SAVE_DATA_CONTACTS=true
       - DATABASE_SAVE_DATA_CHATS=true
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis:6379/0
+      - CACHE_REDIS_PREFIX_KEY=evolution
+      - CACHE_REDIS_SAVE_INSTANCES=false
+      - CACHE_LOCAL_ENABLED=false
       - LOG_LEVEL=ERROR
       - DEL_INSTANCE=false
       - CONFIG_SESSION_PHONE_CLIENT=DELMAT-ERP
@@ -28,6 +33,17 @@ services:
     depends_on:
       postgres:
         condition: service_started
+      redis:
+        condition: service_started
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 100mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - evolution-net
 
   postgres:
     image: postgres:15-alpine
@@ -44,6 +60,7 @@ services:
 volumes:
   evolution_instances:
   postgres_data:
+  redis_data:
 
 networks:
   evolution-net:
