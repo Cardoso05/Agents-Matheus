@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 
 from cerebro.core.config import PROJETOS
+from cerebro.core.enums import EMOJI_CATEGORIA
 from cerebro.db.setup import get_connection
 
 
@@ -308,10 +309,4 @@ def _resumo_from_supabase(mes: str | None = None) -> str:
 
 
 def _emoji_categoria(categoria: str) -> str:
-    emojis = {
-        "alimentacao": "🍔", "transporte": "🚗", "material": "🔧",
-        "servico": "👷", "infra": "💻", "marketing": "📢",
-        "assinatura": "📦", "educacao": "📚", "saude": "💊",
-        "projeto_receita": "💰", "servico_receita": "🏗️", "outros": "📝",
-    }
-    return emojis.get(categoria, "📝")
+    return EMOJI_CATEGORIA.get(categoria, "📝")

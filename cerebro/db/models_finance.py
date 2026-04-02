@@ -3,6 +3,9 @@
 import hashlib
 from datetime import datetime
 
+from cerebro.core.enums import (
+    CategoriaFinanceira, TipoCompromisso, TipoLancamento, validate_enum,
+)
 from cerebro.db.setup import get_connection
 
 
@@ -41,6 +44,8 @@ def criar_lancamento(
     conn=None,
 ) -> dict:
     """Cria um lançamento financeiro."""
+    tipo = validate_enum(tipo, TipoLancamento, "tipo")
+    categoria = validate_enum(categoria, CategoriaFinanceira, "categoria")
     conn = conn or get_connection()
     if data is None:
         data = datetime.now().date().isoformat()
@@ -133,6 +138,7 @@ def criar_compromisso(
     conn=None,
 ) -> dict:
     """Cria um compromisso (conta a pagar ou receber)."""
+    tipo = validate_enum(tipo, TipoCompromisso, "tipo")
     conn = conn or get_connection()
     cursor = conn.execute(
         """INSERT INTO compromissos

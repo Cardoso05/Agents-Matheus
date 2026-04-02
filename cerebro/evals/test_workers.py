@@ -116,17 +116,12 @@ class TestJobQueue:
 class TestRunnerWithUnknownType:
 
     def test_runner_falha_tipo_desconhecido(self, conn):
-        from cerebro.workers.runner import processar_proximo_job
+        import pytest
 
-        jobs_db.criar_job(
-            tipo="tipo_que_nao_existe",
-            instrucoes="Algo impossível",
-            conn=conn,
-        )
-        processou = processar_proximo_job(conn=conn)
-        assert processou is True
-
-        # Job deve estar com status 'erro'
-        jobs = jobs_db.listar_jobs(status="erro", conn=conn)
-        assert len(jobs) == 1
-        assert "não encontrado" in jobs[0]["erro"]
+        # Validação rejeita tipo inválido na criação
+        with pytest.raises(ValueError, match="Valor inválido para tipo"):
+            jobs_db.criar_job(
+                tipo="tipo_que_nao_existe",
+                instrucoes="Algo impossível",
+                conn=conn,
+            )

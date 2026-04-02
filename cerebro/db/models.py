@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from cerebro.core.enums import CategoriaFato, ProjetoSlug, StatusPendencia, validate_enum
 from cerebro.db.setup import get_connection
 
 
@@ -27,6 +28,7 @@ def criar_pendencia(
     notas: str | None = None,
     conn=None,
 ) -> dict:
+    projeto = validate_enum(projeto, ProjetoSlug, "projeto")
     conn = conn or get_connection()
     cursor = conn.execute(
         """INSERT INTO pendencias (tarefa, projeto, prioridade, prazo, responsavel, notas)
@@ -79,6 +81,11 @@ def atualizar_pendencia(id: int, conn=None, **campos) -> dict | None:
     updates = {k: v for k, v in campos.items() if k in allowed and v is not None}
     if not updates:
         return pendencia
+
+    if "status" in updates:
+        updates["status"] = validate_enum(updates["status"], StatusPendencia, "status")
+    if "projeto" in updates:
+        updates["projeto"] = validate_enum(updates["projeto"], ProjetoSlug, "projeto")
 
     updates["atualizado_em"] = datetime.now().isoformat()
     set_clause = ", ".join(f"{k} = ?" for k in updates)
@@ -189,6 +196,8 @@ def consultar_decisoes(projeto: str, limite: int = 5, conn=None) -> list[dict]:
 
 
 def registrar_fato(projeto: str, categoria: str, fato: str, conn=None) -> dict:
+    projeto = validate_enum(projeto, ProjetoSlug, "projeto")
+    categoria = validate_enum(categoria, CategoriaFato, "categoria")
     conn = conn or get_connection()
     cursor = conn.execute(
         "INSERT INTO fatos_projeto (projeto, categoria, fato) VALUES (?, ?, ?)",

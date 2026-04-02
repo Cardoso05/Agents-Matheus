@@ -134,25 +134,14 @@ def seed_all(conn=None):
 
     # ── Categorias financeiras padrão ─────────────────────
 
-    categorias_default = [
-        ("alimentacao", "saida", "🍔", '["ifood","restaurante","almoço","jantar","padaria","mercado","lanche"]'),
-        ("transporte", "saida", "🚗", '["uber","99","combustível","gasolina","estacionamento","pedágio"]'),
-        ("material", "saida", "🔧", '["intelbras","furukawa","cabo","switch","câmera","nvr","rack"]'),
-        ("servico", "saida", "👷", '["mão de obra","diária","frete","terceirizado"]'),
-        ("infra", "saida", "💻", '["hostinger","domínio","servidor","vps","api","anthropic"]'),
-        ("marketing", "saida", "📢", '["meta ads","google ads","facebook","criativos","canva"]'),
-        ("assinatura", "saida", "📦", '["netflix","spotify","total pass","icloud","canva"]'),
-        ("educacao", "saida", "📚", '["unifesp","faculdade","livro","curso"]'),
-        ("saude", "saida", "💊", '["farmácia","academia","médico","dentista","natação"]'),
-        ("projeto_receita", "entrada", "💰", '["setup","mensalidade","retainer"]'),
-        ("servico_receita", "entrada", "🏗️", '["obra","instalação","nf emitida"]'),
-        ("outros", "ambos", "📝", '[]'),
-    ]
-    for nome, tipo, emoji, keywords in categorias_default:
+    from cerebro.core.enums import CATEGORIAS_META
+    import json
+
+    for nome, meta in CATEGORIAS_META.items():
         try:
             conn.execute(
                 "INSERT OR IGNORE INTO categorias (nome, tipo, emoji, keywords) VALUES (?, ?, ?, ?)",
-                (nome, tipo, emoji, keywords),
+                (nome, meta["tipo"], meta["emoji"], json.dumps(meta["keywords"])),
             )
         except Exception:
             pass
