@@ -7,7 +7,7 @@ services:
     env_file:
       - .env
     environment:
-      - SERVER_URL=${SERVER_URL:-https://wpp.delmat.com.br}
+      - SERVER_URL=${SERVER_URL:-https://wpp.cardosomatheus.com.br}
       - AUTHENTICATION_API_KEY=${AUTHENTICATION_API_KEY}
       - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
       - DATABASE_PROVIDER=postgresql

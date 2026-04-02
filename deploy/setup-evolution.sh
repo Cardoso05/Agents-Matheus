@@ -3,13 +3,13 @@
 # Setup da Evolution API v2 na VPS Hetzner — DELMAT
 # Uso: sudo bash deploy/setup-evolution.sh
 #
-# Pré-requisito: DNS A de wpp.delmat.com.br apontando para o IP
+# Pré-requisito: DNS A de wpp.cardosomatheus.com.br apontando para o IP
 # desta VPS antes de rodar (necessário para o SSL).
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
 EVOLUTION_DIR="/opt/evolution-api"
-DOMAIN="wpp.delmat.com.br"
+DOMAIN="wpp.cardosomatheus.com.br"
 INSTANCE_NAME="delmat-principal"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -92,7 +92,7 @@ echo "🌐 [5/8] Configurando Nginx..."
 cat > /etc/nginx/sites-available/"$DOMAIN" <<'NGINX_TEMP'
 server {
     listen 80;
-    server_name wpp.delmat.com.br;
+    server_name wpp.cardosomatheus.com.br;
 
     location / {
         proxy_pass http://127.0.0.1:8080;

@@ -18,7 +18,7 @@ API_KEY=$(grep '^AUTHENTICATION_API_KEY=' "$ENV_FILE" | cut -d'=' -f2)
 # Verifica status da API
 HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
     -H "apikey: $API_KEY" \
-    "https://wpp.delmat.com.br/instance/connectionState/$INSTANCE_NAME" 2>/dev/null || echo "000")
+    "https://wpp.cardosomatheus.com.br/instance/connectionState/$INSTANCE_NAME" 2>/dev/null || echo "000")
 
 if [[ "$HTTP_STATUS" == "200" ]]; then
     echo "$LOG_PREFIX OK — Evolution API respondendo (HTTP $HTTP_STATUS)"
@@ -34,7 +34,7 @@ docker compose restart
 sleep 30
 HTTP_STATUS_RETRY=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
     -H "apikey: $API_KEY" \
-    "https://wpp.delmat.com.br/instance/connectionState/$INSTANCE_NAME" 2>/dev/null || echo "000")
+    "https://wpp.cardosomatheus.com.br/instance/connectionState/$INSTANCE_NAME" 2>/dev/null || echo "000")
 
 if [[ "$HTTP_STATUS_RETRY" == "200" ]]; then
     echo "$LOG_PREFIX RECUPERADO — Evolution API voltou após restart (HTTP $HTTP_STATUS_RETRY)"
