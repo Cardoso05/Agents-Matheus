@@ -101,3 +101,19 @@ update:
 	.venv/bin/pip install -e ".[telegram,web]"
 	sudo systemctl restart cerebro-bot cerebro-web
 	@echo "✅ Atualizado e reiniciado!"
+
+# ── Deploy Automatizado ─────────────────────────────────────
+
+deploy-setup:
+	sudo bash deploy/setup-deploy.sh
+
+deploy-manual:
+	bash deploy/deploy.sh manual "deploy manual" matheus
+
+deploy-logs:
+	tail -100 deploy/deploys.log
+
+deploy-status:
+	@sudo systemctl status cerebro-deploy --no-pager -l
+	@echo "---"
+	@curl -sf http://127.0.0.1:9000/webhook/health 2>/dev/null || echo "Listener não responde"
