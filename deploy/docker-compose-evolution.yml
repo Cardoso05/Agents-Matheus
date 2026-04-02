@@ -1,6 +1,6 @@
 services:
   evolution-api:
-    image: atendai/evolution-api:latest
+    image: evoapicloud/evolution-api:v2.3.7
     restart: always
     ports:
       - "127.0.0.1:8080:8080"
@@ -24,7 +24,7 @@ services:
       - CACHE_LOCAL_ENABLED=false
       - LOG_LEVEL=ERROR
       - DEL_INSTANCE=false
-      - CONFIG_SESSION_PHONE_CLIENT=DELMAT-ERP
+      - CONFIG_SESSION_PHONE_CLIENT=Chrome
       - CONFIG_SESSION_PHONE_NAME=Chrome
     volumes:
       - evolution_instances:/evolution/instances
