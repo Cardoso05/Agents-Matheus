@@ -254,3 +254,52 @@ def get_resumo(projeto: str, conn=None) -> str | None:
     conn = conn or get_connection()
     row = conn.execute("SELECT resumo FROM resumo_projeto WHERE projeto = ?", (projeto,)).fetchone()
     return row["resumo"] if row else None
+
+
+# ── CRUD extra para fatos e stakeholders ───────────────────
+
+
+def listar_todos_fatos(conn=None) -> list[dict]:
+    """Lista todos os fatos (ativos e inativos)."""
+    conn = conn or get_connection()
+    rows = conn.execute(
+        "SELECT * FROM fatos_projeto ORDER BY projeto, categoria, id"
+    ).fetchall()
+    return _rows_to_list(rows)
+
+
+def toggle_fato(id: int, conn=None) -> dict | None:
+    """Alterna ativo/inativo de um fato."""
+    conn = conn or get_connection()
+    row = conn.execute("SELECT * FROM fatos_projeto WHERE id = ?", (id,)).fetchone()
+    if not row:
+        return None
+    novo_ativo = 0 if row["ativo"] else 1
+    conn.execute("UPDATE fatos_projeto SET ativo = ? WHERE id = ?", (novo_ativo, id))
+    conn.commit()
+    return _row_to_dict(conn.execute("SELECT * FROM fatos_projeto WHERE id = ?", (id,)).fetchone())
+
+
+def deletar_fato(id: int, conn=None) -> bool:
+    """Remove um fato permanentemente."""
+    conn = conn or get_connection()
+    cursor = conn.execute("DELETE FROM fatos_projeto WHERE id = ?", (id,))
+    conn.commit()
+    return cursor.rowcount > 0
+
+
+def listar_todos_stakeholders(conn=None) -> list[dict]:
+    """Lista todos os stakeholders ativos."""
+    conn = conn or get_connection()
+    rows = conn.execute(
+        "SELECT * FROM stakeholders WHERE ativo = 1 ORDER BY projeto, nome"
+    ).fetchall()
+    return _rows_to_list(rows)
+
+
+def deletar_stakeholder(id: int, conn=None) -> bool:
+    """Remove um stakeholder."""
+    conn = conn or get_connection()
+    cursor = conn.execute("DELETE FROM stakeholders WHERE id = ?", (id,))
+    conn.commit()
+    return cursor.rowcount > 0

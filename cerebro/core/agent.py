@@ -730,7 +730,7 @@ class AgenteGerente:
             pass  # Não falhar por causa de métricas
 
     def _build_prompt(self, projeto: str | None = None) -> str:
-        """Monta system prompt com base + skill + pendências + decisões."""
+        """Monta system prompt com base + skill + pendências + decisões + fatos."""
         parts = [SYSTEM_PROMPT_BASE]
 
         # Skill do projeto
@@ -753,6 +753,24 @@ class AgenteGerente:
             decisoes = models.consultar_decisoes(projeto, limite=5)
             if decisoes:
                 parts.append(f"\n── DECISÕES RECENTES ──\n{self._format_decisoes(decisoes)}")
+
+        # Fatos do projeto (memória estruturada)
+        if projeto:
+            fatos = models.listar_fatos(projeto)
+            if fatos:
+                fatos_text = "\n".join(
+                    f"  [{f['categoria'].upper()}] {f['fato']}" for f in fatos
+                )
+                parts.append(f"\n── FATOS DO PROJETO ──\n{fatos_text}")
+
+        # Contexto geral (fatos do projeto "geral" — sempre carregados)
+        if projeto != "geral":
+            fatos_geral = models.listar_fatos("geral")
+            if fatos_geral:
+                fatos_text = "\n".join(
+                    f"  [{f['categoria'].upper()}] {f['fato']}" for f in fatos_geral
+                )
+                parts.append(f"\n── CONTEXTO GERAL ──\n{fatos_text}")
 
         return "\n".join(parts)
 

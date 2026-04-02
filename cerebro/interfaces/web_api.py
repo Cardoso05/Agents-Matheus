@@ -16,7 +16,8 @@ from cerebro.db.metricas import metricas_periodo, custo_periodo, erros_recentes
 from cerebro.db.conversas import historico_sessao
 from cerebro.db import models_finance
 from cerebro.integrations import calendar
-from cerebro.core.config import PROJETOS
+from cerebro.core.config import PROJETOS, SKILLS_DIR
+from cerebro.core.enums import CategoriaFato
 from cerebro.core.deterministic import (
     status_geral,
     top_n_do_dia,
@@ -75,6 +76,23 @@ class NovoJob(BaseModel):
     instrucoes: str
     projeto: str | None = None
     escopo: dict | None = None
+
+
+class NovoFato(BaseModel):
+    projeto: str
+    categoria: str
+    fato: str
+
+
+class NovoStakeholder(BaseModel):
+    projeto: str
+    nome: str
+    papel: str
+    contato: str | None = None
+
+
+class SkillContent(BaseModel):
+    conteudo: str
 
 
 class NovoLancamento(BaseModel):
@@ -486,3 +504,129 @@ def page_metricas(request: Request):
         "custos": custos,
         "erros_recentes": erros,
     })
+
+
+# ══════════════════════════════════════════════════════════════
+# CONTEXTO — Skills, Fatos, Stakeholders
+# ══════════════════════════════════════════════════════════════
+
+
+@app.get("/contexto", response_class=HTMLResponse)
+def page_contexto(request: Request):
+    # Skills (.md files)
+    skills = []
+    if SKILLS_DIR.exists():
+        for p in sorted(SKILLS_DIR.glob("*.md")):
+            conteudo = p.read_text(encoding="utf-8")
+            linhas = len(conteudo.splitlines())
+            tamanho = f"{len(conteudo) / 1024:.1f}KB" if len(conteudo) > 1024 else f"{len(conteudo)}B"
+            skills.append({
+                "projeto": p.stem,
+                "conteudo": conteudo,
+                "linhas": linhas,
+                "tamanho": tamanho,
+            })
+
+    # Fatos agrupados por projeto
+    todos_fatos = models.listar_todos_fatos()
+    fatos_por_projeto = {}
+    for f in todos_fatos:
+        fatos_por_projeto.setdefault(f["projeto"], []).append(f)
+
+    # Stakeholders agrupados por projeto
+    todos_stk = models.listar_todos_stakeholders()
+    stakeholders_por_projeto = {}
+    for s in todos_stk:
+        stakeholders_por_projeto.setdefault(s["projeto"], []).append(s)
+
+    return templates.TemplateResponse(request, "contexto.html", {
+        "skills": skills,
+        "fatos_por_projeto": fatos_por_projeto,
+        "stakeholders_por_projeto": stakeholders_por_projeto,
+        "projetos": PROJETOS,
+        "categorias_fato": [c.value for c in CategoriaFato],
+    })
+
+
+# ── API Skills ─────────────────────────────────────────────
+
+
+@app.get("/api/skills/{projeto}")
+def api_get_skill(projeto: str):
+    skill_path = SKILLS_DIR / f"{projeto}.md"
+    if not skill_path.exists():
+        raise HTTPException(status_code=404, detail="Skill não encontrada")
+    return {"projeto": projeto, "conteudo": skill_path.read_text(encoding="utf-8")}
+
+
+@app.put("/api/skills/{projeto}")
+def api_salvar_skill(projeto: str, body: SkillContent):
+    SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+    skill_path = SKILLS_DIR / f"{projeto}.md"
+    skill_path.write_text(body.conteudo, encoding="utf-8")
+    return {"status": "ok", "projeto": projeto}
+
+
+@app.delete("/api/skills/{projeto}")
+def api_deletar_skill(projeto: str):
+    skill_path = SKILLS_DIR / f"{projeto}.md"
+    if skill_path.exists():
+        skill_path.unlink()
+    return {"status": "ok"}
+
+
+# ── API Fatos ──────────────────────────────────────────────
+
+
+@app.get("/api/fatos")
+def api_listar_fatos():
+    return models.listar_todos_fatos()
+
+
+@app.post("/api/fatos")
+def api_criar_fato(body: NovoFato):
+    return models.registrar_fato(
+        projeto=body.projeto,
+        categoria=body.categoria,
+        fato=body.fato,
+    )
+
+
+@app.put("/api/fatos/{id}/toggle")
+def api_toggle_fato(id: int):
+    result = models.toggle_fato(id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Fato não encontrado")
+    return result
+
+
+@app.delete("/api/fatos/{id}")
+def api_deletar_fato(id: int):
+    if not models.deletar_fato(id):
+        raise HTTPException(status_code=404, detail="Fato não encontrado")
+    return {"status": "ok"}
+
+
+# ── API Stakeholders ───────────────────────────────────────
+
+
+@app.get("/api/stakeholders")
+def api_listar_stakeholders():
+    return models.listar_todos_stakeholders()
+
+
+@app.post("/api/stakeholders")
+def api_criar_stakeholder(body: NovoStakeholder):
+    return models.registrar_stakeholder(
+        projeto=body.projeto,
+        nome=body.nome,
+        papel=body.papel,
+        contato=body.contato,
+    )
+
+
+@app.delete("/api/stakeholders/{id}")
+def api_deletar_stakeholder(id: int):
+    if not models.deletar_stakeholder(id):
+        raise HTTPException(status_code=404, detail="Stakeholder não encontrado")
+    return {"status": "ok"}

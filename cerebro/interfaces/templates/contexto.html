@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% block title %}Contexto{% endblock %}
+{% block content %}
+<h2>Contexto & Skills</h2>
+
+<!-- Tabs -->
+<div class="tabs">
+    <a href="#skills" class="active" onclick="switchTab(event, 'skills')">📝 Skills</a>
+    <a href="#fatos" onclick="switchTab(event, 'fatos')">🧠 Fatos</a>
+    <a href="#stakeholders" onclick="switchTab(event, 'stakeholders')">👥 Stakeholders</a>
+</div>
+
+<!-- ══════════════════════════════════════ SKILLS ══════════════════════════════════════ -->
+<div id="tab-skills" class="tab-content active">
+
+    <p><small>Arquivos <code>.md</code> carregados no prompt do agente por projeto. Edite diretamente.</small></p>
+
+    {% for s in skills %}
+    <details>
+        <summary>
+            <strong>{{ s.projeto }}</strong>
+            <small>({{ s.linhas }} linhas, {{ s.tamanho }})</small>
+        </summary>
+        <form onsubmit="salvarSkill(event, '{{ s.projeto }}')">
+            <textarea class="skill-editor" id="skill-{{ s.projeto }}">{{ s.conteudo }}</textarea>
+            <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                <button type="submit" class="btn-salvar">Salvar</button>
+                <small id="skill-status-{{ s.projeto }}" style="align-self: center;"></small>
+            </div>
+        </form>
+    </details>
+    {% endfor %}
+
+    <details>
+        <summary><strong>+ Criar nova Skill</strong></summary>
+        <form class="form-inline" onsubmit="criarSkill(event)">
+            <div class="form-group">
+                <label>Projeto</label>
+                <input type="text" id="nova-skill-projeto" required placeholder="slug (ex: novo_projeto)">
+            </div>
+            <div class="form-group form-group-wide">
+                <label>Conteúdo</label>
+                <textarea id="nova-skill-conteudo" rows="6" placeholder="# Sobre o Projeto&#10;&#10;Descreva o contexto..." style="font-family: monospace; font-size: 0.85rem;"></textarea>
+            </div>
+            <div class="form-group">
+                <button type="submit">Criar</button>
+            </div>
+        </form>
+    </details>
+</div>
+
+<!-- ══════════════════════════════════════ FATOS ══════════════════════════════════════ -->
+<div id="tab-fatos" class="tab-content">
+
+    <p><small>Memória estruturada injetada no prompt do agente. Fatos ativos aparecem automaticamente no contexto.</small></p>
+
+    <!-- Criar fato -->
+    <details>
+        <summary><strong>+ Registrar Fato</strong></summary>
+        <form class="form-inline" onsubmit="criarFato(event)">
+            <div class="form-group">
+                <label>Projeto</label>
+                <select id="fato-projeto" required>
+                    {% for slug, info in projetos.items() %}
+                    <option value="{{ slug }}">{{ info.emoji }} {{ info.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Categoria</label>
+                <select id="fato-categoria" required>
+                    {% for cat in categorias_fato %}
+                    <option value="{{ cat }}">{{ cat }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group form-group-wide">
+                <label>Fato</label>
+                <input type="text" id="fato-texto" required placeholder="Informação relevante sobre o projeto...">
+            </div>
+            <div class="form-group">
+                <button type="submit">Registrar</button>
+            </div>
+        </form>
+    </details>
+
+    <!-- Lista de fatos agrupados por projeto -->
+    {% for projeto_slug, fatos_grupo in fatos_por_projeto.items() %}
+    <h4>{{ projetos.get(projeto_slug, {}).get("emoji", "📁") }} {{ projetos.get(projeto_slug, {}).get("nome", projeto_slug.upper()) }}</h4>
+    <table>
+        <thead>
+            <tr>
+                <th>Categoria</th>
+                <th>Fato</th>
+                <th>Status</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in fatos_grupo %}
+            <tr class="{{ 'fato-inativo' if not f.ativo else '' }}" id="fato-row-{{ f.id }}">
+                <td><span class="badge badge-{{ f.categoria }}">{{ f.categoria }}</span></td>
+                <td>{{ f.fato }}</td>
+                <td>{{ "✅ Ativo" if f.ativo else "❌ Inativo" }}</td>
+                <td>
+                    <button class="btn-toggle" onclick="toggleFato({{ f.id }})">{{ "Desativar" if f.ativo else "Ativar" }}</button>
+                    <button class="btn-excluir" onclick="deletarFato({{ f.id }})">Excluir</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endfor %}
+
+    {% if not fatos_por_projeto %}
+    <p><em>Nenhum fato registrado. Use o formulário acima ou peça ao agente: "registra fato: ..."</em></p>
+    {% endif %}
+</div>
+
+<!-- ══════════════════════════════════════ STAKEHOLDERS ══════════════════════════════════════ -->
+<div id="tab-stakeholders" class="tab-content">
+
+    <p><small>Pessoas envolvidas nos projetos. Consultadas pelo agente via <code>listar_stakeholders</code>.</small></p>
+
+    <details>
+        <summary><strong>+ Adicionar Stakeholder</strong></summary>
+        <form class="form-inline" onsubmit="criarStakeholder(event)">
+            <div class="form-group">
+                <label>Projeto</label>
+                <select id="stk-projeto" required>
+                    {% for slug, info in projetos.items() %}
+                    <option value="{{ slug }}">{{ info.emoji }} {{ info.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Nome</label>
+                <input type="text" id="stk-nome" required placeholder="Nome da pessoa">
+            </div>
+            <div class="form-group">
+                <label>Papel</label>
+                <input type="text" id="stk-papel" required placeholder="ex: parceiro, técnico, coordenador">
+            </div>
+            <div class="form-group">
+                <label>Contato</label>
+                <input type="text" id="stk-contato" placeholder="whatsapp, telegram, email...">
+            </div>
+            <div class="form-group">
+                <button type="submit">Adicionar</button>
+            </div>
+        </form>
+    </details>
+
+    {% for projeto_slug, stks_grupo in stakeholders_por_projeto.items() %}
+    <h4>{{ projetos.get(projeto_slug, {}).get("emoji", "📁") }} {{ projetos.get(projeto_slug, {}).get("nome", projeto_slug.upper()) }}</h4>
+    <table>
+        <thead>
+            <tr>
+                <th>Nome</th>
+                <th>Papel</th>
+                <th>Contato</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in stks_grupo %}
+            <tr id="stk-row-{{ s.id }}">
+                <td><strong>{{ s.nome }}</strong></td>
+                <td>{{ s.papel }}</td>
+                <td>{{ s.contato or "—" }}</td>
+                <td>
+                    <button class="btn-excluir" onclick="deletarStakeholder({{ s.id }})">Excluir</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endfor %}
+
+    {% if not stakeholders_por_projeto %}
+    <p><em>Nenhum stakeholder cadastrado.</em></p>
+    {% endif %}
+</div>
+
+<script>
+function switchTab(e, tab) {
+    e.preventDefault();
+    document.querySelectorAll('.tabs a').forEach(a => a.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    e.target.classList.add('active');
+    document.getElementById('tab-' + tab).classList.add('active');
+}
+
+// ── Skills ──────────────────────────────────────────
+async function salvarSkill(e, projeto) {
+    e.preventDefault();
+    const conteudo = document.getElementById('skill-' + projeto).value;
+    const status = document.getElementById('skill-status-' + projeto);
+    try {
+        const res = await fetch('/api/skills/' + projeto, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({conteudo: conteudo})
+        });
+        if (res.ok) {
+            status.textContent = '✅ Salvo!';
+            setTimeout(() => status.textContent = '', 3000);
+        } else {
+            const data = await res.json();
+            status.textContent = '❌ ' + (data.detail || 'Erro');
+        }
+    } catch (err) { status.textContent = '❌ Erro de rede'; }
+}
+
+async function criarSkill(e) {
+    e.preventDefault();
+    const projeto = document.getElementById('nova-skill-projeto').value.trim().toLowerCase();
+    const conteudo = document.getElementById('nova-skill-conteudo').value;
+    const res = await fetch('/api/skills/' + projeto, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({conteudo: conteudo})
+    });
+    if (res.ok) { location.reload(); }
+    else { alert('Erro ao criar skill'); }
+}
+
+// ── Fatos ───────────────────────────────────────────
+async function criarFato(e) {
+    e.preventDefault();
+    const res = await fetch('/api/fatos', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            projeto: document.getElementById('fato-projeto').value,
+            categoria: document.getElementById('fato-categoria').value,
+            fato: document.getElementById('fato-texto').value,
+        })
+    });
+    if (res.ok) { location.reload(); }
+    else { alert('Erro ao criar fato'); }
+}
+
+async function toggleFato(id) {
+    const res = await fetch('/api/fatos/' + id + '/toggle', {method: 'PUT'});
+    if (res.ok) { location.reload(); }
+}
+
+async function deletarFato(id) {
+    if (!confirm('Excluir este fato?')) return;
+    const res = await fetch('/api/fatos/' + id, {method: 'DELETE'});
+    if (res.ok) { document.getElementById('fato-row-' + id)?.remove(); }
+}
+
+// ── Stakeholders ────────────────────────────────────
+async function criarStakeholder(e) {
+    e.preventDefault();
+    const res = await fetch('/api/stakeholders', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            projeto: document.getElementById('stk-projeto').value,
+            nome: document.getElementById('stk-nome').value,
+            papel: document.getElementById('stk-papel').value,
+            contato: document.getElementById('stk-contato').value || null,
+        })
+    });
+    if (res.ok) { location.reload(); }
+    else { alert('Erro ao criar stakeholder'); }
+}
+
+async function deletarStakeholder(id) {
+    if (!confirm('Excluir este stakeholder?')) return;
+    const res = await fetch('/api/stakeholders/' + id, {method: 'DELETE'});
+    if (res.ok) { document.getElementById('stk-row-' + id)?.remove(); }
+}
+</script>
+{% endblock %}
