@@ -330,9 +330,42 @@
             <tr><td><code>/top3</code></td><td>Top 3 tarefas mais urgentes do dia</td></tr>
             <tr><td><code>/atrasadas</code></td><td>Lista tarefas atrasadas</td></tr>
             <tr><td><code>/semanal</code></td><td>Review semanal completa</td></tr>
+            <tr><td><code>/triggers</code></td><td>Status dos triggers condicionais</td></tr>
             <tr><td><em>Texto livre</em></td><td>Classificador analisa e roteia para funcao ou agente LLM</td></tr>
         </tbody>
     </table>
+</div>
+
+<!-- ── Triggers Condicionais ─────────────────────────────── -->
+<div class="system-section">
+    <h3>Triggers Condicionais</h3>
+    <p>Avaliados a cada 30 minutos. So notificam quando a condicao e verdadeira. Cooldown impede repeticao.</p>
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Nome</th><th>Prioridade</th><th>Cooldown</th><th>Status</th><th>Ultimo disparo</th></tr>
+        </thead>
+        <tbody>
+            {% for t in triggers %}
+            <tr>
+                <td><code>{{ t.id }}</code></td>
+                <td>{{ t.nome }}<br><small>{{ t.descricao }}</small></td>
+                <td>
+                    {% if t.prioridade == 'alta' %}<span class="fonte-tag" style="background:#fee2e2;color:#991b1b">alta</span>
+                    {% elif t.prioridade == 'media' %}<span class="fonte-tag" style="background:#fef3c7;color:#92400e">media</span>
+                    {% else %}<span class="fonte-tag" style="background:#d1fae5;color:#065f46">baixa</span>{% endif %}
+                </td>
+                <td>{{ t.cooldown_horas }}h</td>
+                <td>
+                    {% if not t.ativo %}❌ desativado
+                    {% elif t.pausado_ate %}⏸ pausado
+                    {% else %}✅ ativo{% endif %}
+                </td>
+                <td>{{ t.ultimo_disparo[:16] if t.ultimo_disparo else 'nunca' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <p><small>API: <code>GET /api/triggers</code> para listar, <code>PUT /api/triggers/{id}?ativo=false</code> para desativar.</small></p>
 </div>
 
 {% endblock %}

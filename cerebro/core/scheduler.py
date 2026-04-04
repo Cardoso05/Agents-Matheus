@@ -175,6 +175,25 @@ async def revisao_contexto_semanal():
     await _notificar(f"🔄 Revisão de contexto iniciada para {len(projetos_ativos)} projeto(s)")
 
 
+async def avaliar_triggers():
+    """A cada 30 min — Avalia triggers condicionais."""
+    logger.info("Avaliando triggers condicionais")
+    from cerebro.core.trigger_engine import TriggerEngine
+    from cerebro.db.setup import get_connection
+
+    try:
+        engine = TriggerEngine(get_connection())
+        mensagens = engine.avaliar_todos()
+
+        for msg in mensagens:
+            await _notificar(msg)
+
+        if mensagens:
+            logger.info(f"{len(mensagens)} trigger(s) disparado(s)")
+    except Exception as e:
+        logger.error(f"Erro ao avaliar triggers: {e}", exc_info=True)
+
+
 async def processar_fila_jobs():
     """A cada 30s — Processa jobs pendentes na fila."""
     from cerebro.workers.runner import processar_proximo_job
@@ -223,6 +242,12 @@ def criar_scheduler() -> AsyncIOScheduler:
     scheduler.add_job(
         review_semanal_llm, "cron",
         day_of_week="sun", hour=20, id="review_semanal",
+    )
+
+    # Trigger engine (a cada 30 min)
+    scheduler.add_job(
+        avaliar_triggers, "interval",
+        minutes=30, id="trigger_engine",
     )
 
     # Processador de fila de jobs (a cada 30s)

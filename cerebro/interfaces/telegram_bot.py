@@ -194,6 +194,48 @@ async def cmd_semanal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _safe_reply(update.message, resumo_semanal())
 
 
+async def cmd_triggers(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler do /triggers — mostra status dos triggers condicionais."""
+    if not _is_authorized(update.effective_user.id):
+        return
+    from cerebro.core.trigger_engine import listar_status_triggers
+    from cerebro.db.setup import get_connection
+
+    status = listar_status_triggers(get_connection())
+    emoji_prio = {"alta": "🔴", "media": "🟡", "baixa": "🟢"}
+
+    linhas = ["🔔 **Triggers Condicionais**\n"]
+    for s in status:
+        prio = emoji_prio.get(s["prioridade"], "⚪")
+        if not s["ativo"]:
+            estado = "❌ desativado"
+        elif s.get("pausado_ate"):
+            estado = f"⏸ pausado até {s['pausado_ate'][:10]}"
+        else:
+            estado = "✅ ativo"
+
+        ultimo = f"há {_tempo_relativo(s['ultimo_disparo'])}" if s["ultimo_disparo"] else "nunca"
+        linhas.append(f"{prio} `{s['id']}` {s['nome']} — {estado} — último: {ultimo}")
+
+    await _safe_reply(update.message, "\n".join(linhas))
+
+
+def _tempo_relativo(timestamp_str: str) -> str:
+    """Converte timestamp ISO em texto relativo (ex: '2 dias')."""
+    from datetime import datetime
+    try:
+        dt = datetime.fromisoformat(timestamp_str)
+        delta = datetime.now() - dt
+        if delta.days > 0:
+            return f"{delta.days} dia(s)"
+        horas = int(delta.total_seconds() / 3600)
+        if horas > 0:
+            return f"{horas}h"
+        return f"{int(delta.total_seconds() / 60)} min"
+    except (ValueError, TypeError):
+        return "?"
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler de mensagens de texto genéricas."""
     if not _is_authorized(update.effective_user.id):
@@ -255,6 +297,7 @@ def create_app() -> Application:
     app.add_handler(CommandHandler("top3", cmd_top3))
     app.add_handler(CommandHandler("atrasadas", cmd_atrasadas))
     app.add_handler(CommandHandler("semanal", cmd_semanal))
+    app.add_handler(CommandHandler("triggers", cmd_triggers))
 
     # Mensagens de texto
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

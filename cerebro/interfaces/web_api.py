@@ -377,6 +377,26 @@ def api_deletar_fato(id: int):
     return {"ok": True, "id": id}
 
 
+# ── Triggers API ───────────────────────────────────────────────
+
+
+@app.get("/api/triggers")
+def api_triggers():
+    from cerebro.core.trigger_engine import listar_status_triggers
+    from cerebro.db.setup import get_connection
+    return listar_status_triggers(get_connection())
+
+
+@app.put("/api/triggers/{trigger_id}", dependencies=[Depends(_verify_api_key)])
+def api_toggle_trigger(trigger_id: str, ativo: bool = True):
+    from cerebro.core.trigger_engine import toggle_trigger
+    from cerebro.db.setup import get_connection
+    ok = toggle_trigger(get_connection(), trigger_id, ativo)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Trigger não encontrado")
+    return {"ok": True, "id": trigger_id, "ativo": ativo}
+
+
 # ── Dashboard Pages ─────────────────────────────────────────
 
 
@@ -571,8 +591,14 @@ def page_sistema(request: Request):
             aliases_por_projeto.setdefault(projeto, []).append(alias)
     aliases_str = {p: ", ".join(a) for p, a in aliases_por_projeto.items()}
 
+    # Triggers status
+    from cerebro.core.trigger_engine import listar_status_triggers
+    from cerebro.db.setup import get_connection
+    triggers = listar_status_triggers(get_connection())
+
     return templates.TemplateResponse(request, "sistema.html", {
         "projetos": PROJETOS,
         "skills": skills_info,
         "aliases": aliases_str,
+        "triggers": triggers,
     })

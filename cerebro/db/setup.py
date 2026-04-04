@@ -239,4 +239,26 @@ CREATE TABLE IF NOT EXISTS orcamento (
     mes             TEXT NOT NULL,
     UNIQUE(categoria, projeto, mes)
 );
+
+-- ══ Triggers Condicionais ══
+
+-- Configuração de triggers (ativo/inativo, cooldown custom)
+CREATE TABLE IF NOT EXISTS trigger_config (
+    id              TEXT PRIMARY KEY,
+    ativo           BOOLEAN DEFAULT 1,
+    cooldown_horas  INTEGER,
+    pausado_ate     DATETIME,
+    criado_em       DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Log de disparos (controla cooldown + histórico)
+CREATE TABLE IF NOT EXISTS trigger_log (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    trigger_id      TEXT NOT NULL,
+    dados           TEXT,
+    notificado      BOOLEAN DEFAULT 1,
+    timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_trigger_log_recent ON trigger_log(trigger_id, timestamp DESC);
 """
