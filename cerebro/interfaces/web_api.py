@@ -16,7 +16,7 @@ from cerebro.db.metricas import metricas_periodo, custo_periodo, erros_recentes
 from cerebro.db.conversas import historico_sessao
 from cerebro.db import models_finance
 from cerebro.integrations import calendar
-from cerebro.core.config import PROJETOS
+from cerebro.core.config import PROJETOS, SKILLS_DIR
 from cerebro.core.deterministic import (
     status_geral,
     top_n_do_dia,
@@ -115,6 +115,18 @@ class AtualizarEvento(BaseModel):
     duracao_minutos: int | None = None
     projeto: str | None = Field(None, max_length=50)
     notas: str | None = Field(None, max_length=2000)
+
+
+class NovoFato(BaseModel):
+    projeto: str
+    categoria: str
+    fato: str
+
+
+class AtualizarFato(BaseModel):
+    projeto: str | None = None
+    categoria: str | None = None
+    fato: str | None = None
 
 
 class Mensagem(BaseModel):
@@ -335,6 +347,36 @@ def api_mensagem(m: Mensagem):
     return {"resposta": response}
 
 
+# ── Fatos / Contexto API ──────────────────────────────────────
+
+
+@app.get("/api/fatos")
+def api_fatos(projeto: str | None = None, categoria: str | None = None):
+    return models.listar_todos_fatos(projeto=projeto, categoria=categoria)
+
+
+@app.post("/api/fatos", dependencies=[Depends(_verify_api_key)])
+def api_criar_fato(f: NovoFato):
+    return models.registrar_fato(projeto=f.projeto, categoria=f.categoria, fato=f.fato)
+
+
+@app.put("/api/fatos/{id}", dependencies=[Depends(_verify_api_key)])
+def api_atualizar_fato(id: int, f: AtualizarFato):
+    campos = f.model_dump(exclude_none=True)
+    result = models.atualizar_fato(id, **campos)
+    if not result:
+        raise HTTPException(status_code=404, detail="Fato não encontrado")
+    return result
+
+
+@app.delete("/api/fatos/{id}", dependencies=[Depends(_verify_api_key)])
+def api_deletar_fato(id: int):
+    ok = models.desativar_fato(id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Fato não encontrado")
+    return {"ok": True, "id": id}
+
+
 # ── Dashboard Pages ─────────────────────────────────────────
 
 
@@ -485,4 +527,24 @@ def page_metricas(request: Request):
         "metricas": metricas,
         "custos": custos,
         "erros_recentes": erros,
+    })
+
+
+@app.get("/contexto", response_class=HTMLResponse)
+def page_contexto(request: Request, projeto: str | None = None):
+    fatos = models.listar_todos_fatos(projeto=projeto)
+
+    # Carregar skills (.md)
+    skills = []
+    for md_file in sorted(SKILLS_DIR.glob("*.md")):
+        skills.append({
+            "nome": md_file.stem,
+            "conteudo": md_file.read_text(encoding="utf-8"),
+        })
+
+    return templates.TemplateResponse(request, "contexto.html", {
+        "fatos": fatos,
+        "skills": skills,
+        "projeto_filtro": projeto,
+        "projetos": PROJETOS,
     })
