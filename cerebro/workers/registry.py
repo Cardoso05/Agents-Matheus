@@ -24,7 +24,7 @@ def _register_all():
     """Importa todos os tipos de worker para que se registrem."""
     from cerebro.workers.types import (  # noqa: F401
         revisao_codigo, pesquisa, geracao_conteudo, relatorio,
-        auditoria, analise_dados,
+        auditoria, analise_dados, revisao_contexto,
     )
 
 

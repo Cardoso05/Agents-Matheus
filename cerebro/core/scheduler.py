@@ -130,6 +130,51 @@ async def review_semanal_llm():
     await _notificar(f"📊 **Review Semanal**\n\n{resumo}")
 
 
+async def revisao_contexto_semanal():
+    """Dom 18:00 — Revisa fatos dos projetos com atividade recente."""
+    logger.info("Revisão de contexto semanal")
+    from cerebro.db.conversas import conversas_recentes_por_projeto, projetos_com_atividade
+    from cerebro.db import jobs as jobs_db
+
+    projetos_ativos = projetos_com_atividade(dias=7)
+    if not projetos_ativos:
+        logger.info("Nenhum projeto com atividade recente — pulando revisão")
+        return
+
+    for projeto in projetos_ativos:
+        conversas = conversas_recentes_por_projeto(projeto, dias=7, limite=50)
+        if not conversas:
+            continue
+
+        conv_text = "\n".join(
+            f"[{c['timestamp'][:10]}] {c['role']}: {c['conteudo'][:300]}"
+            for c in conversas
+        )
+
+        instrucoes = (
+            f"Revise os fatos do projeto '{projeto}'.\n\n"
+            f"## Conversas recentes (últimos 7 dias):\n{conv_text}\n\n"
+            "## Sua tarefa:\n"
+            "1. Use `listar_fatos` para ver os fatos atuais do projeto.\n"
+            "2. Use `consultar_decisoes` e `listar_pendencias` para contexto adicional.\n"
+            "3. Compare com as conversas acima.\n"
+            "4. Desative fatos claramente desatualizados (use `desativar_fato`).\n"
+            "5. Adicione fatos novos que são PERMANENTES e relevantes (use `registrar_fato`).\n"
+            "6. NÃO duplique fatos que já existem.\n"
+            "7. NÃO adicione status temporários (ex: 'reunião marcada para quinta').\n"
+            "8. Só registre fatos justificáveis pelas conversas acima.\n"
+            "9. Ao final, liste um resumo das alterações."
+        )
+
+        jobs_db.criar_job(
+            tipo="revisao_contexto",
+            instrucoes=instrucoes,
+            projeto=projeto,
+        )
+
+    await _notificar(f"🔄 Revisão de contexto iniciada para {len(projetos_ativos)} projeto(s)")
+
+
 async def processar_fila_jobs():
     """A cada 30s — Processa jobs pendentes na fila."""
     from cerebro.workers.runner import processar_proximo_job
@@ -171,6 +216,10 @@ def criar_scheduler() -> AsyncIOScheduler:
     )
 
     # Com LLM
+    scheduler.add_job(
+        revisao_contexto_semanal, "cron",
+        day_of_week="sun", hour=18, id="revisao_contexto",
+    )
     scheduler.add_job(
         review_semanal_llm, "cron",
         day_of_week="sun", hour=20, id="review_semanal",

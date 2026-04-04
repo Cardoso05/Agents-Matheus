@@ -80,3 +80,28 @@ def formatar_historico_para_prompt(sessao_id: str, limite: int = 10, conn=None) 
             "content": m["conteudo"],
         })
     return api_messages
+
+
+def projetos_com_atividade(dias: int = 7, conn=None) -> list[str]:
+    """Retorna projetos com conversas nos últimos N dias."""
+    conn = conn or get_connection()
+    rows = conn.execute(
+        """SELECT DISTINCT projeto FROM conversas
+           WHERE projeto IS NOT NULL
+             AND timestamp >= datetime('now', ?)
+           ORDER BY projeto""",
+        (f"-{dias} days",),
+    ).fetchall()
+    return [r["projeto"] for r in rows]
+
+
+def conversas_recentes_por_projeto(projeto: str, dias: int = 7, limite: int = 50, conn=None) -> list[dict]:
+    """Retorna conversas recentes de um projeto, ordenadas por timestamp."""
+    conn = conn or get_connection()
+    rows = conn.execute(
+        """SELECT role, conteudo, timestamp FROM conversas
+           WHERE projeto = ? AND timestamp >= datetime('now', ?)
+           ORDER BY timestamp DESC LIMIT ?""",
+        (projeto, f"-{dias} days", limite),
+    ).fetchall()
+    return [dict(r) for r in rows]
