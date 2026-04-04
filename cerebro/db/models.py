@@ -208,6 +208,49 @@ def listar_fatos(projeto: str, conn=None) -> list[dict]:
     return _rows_to_list(rows)
 
 
+def listar_todos_fatos(
+    projeto: str | None = None,
+    categoria: str | None = None,
+    conn=None,
+) -> list[dict]:
+    conn = conn or get_connection()
+    where, params = ["ativo = 1"], []
+    if projeto:
+        where.append("projeto = ?")
+        params.append(projeto)
+    if categoria:
+        where.append("categoria = ?")
+        params.append(categoria)
+    sql = f"SELECT * FROM fatos_projeto WHERE {' AND '.join(where)} ORDER BY projeto, categoria, criado_em DESC"
+    rows = conn.execute(sql, params).fetchall()
+    return _rows_to_list(rows)
+
+
+def desativar_fato(id: int, conn=None) -> bool:
+    conn = conn or get_connection()
+    row = conn.execute("SELECT id FROM fatos_projeto WHERE id = ? AND ativo = 1", (id,)).fetchone()
+    if not row:
+        return False
+    conn.execute("UPDATE fatos_projeto SET ativo = 0 WHERE id = ?", (id,))
+    conn.commit()
+    return True
+
+
+def atualizar_fato(id: int, conn=None, **campos) -> dict | None:
+    conn = conn or get_connection()
+    row = conn.execute("SELECT * FROM fatos_projeto WHERE id = ? AND ativo = 1", (id,)).fetchone()
+    if not row:
+        return None
+    allowed = {"fato", "categoria", "projeto"}
+    updates = {k: v for k, v in campos.items() if k in allowed and v is not None}
+    if not updates:
+        return _row_to_dict(row)
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    conn.execute(f"UPDATE fatos_projeto SET {set_clause} WHERE id = ?", (*updates.values(), id))
+    conn.commit()
+    return _row_to_dict(conn.execute("SELECT * FROM fatos_projeto WHERE id = ?", (id,)).fetchone())
+
+
 def registrar_stakeholder(
     projeto: str, nome: str, papel: str, contato: str | None = None, notas: str | None = None, conn=None
 ) -> dict:

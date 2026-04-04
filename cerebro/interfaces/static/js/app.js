@@ -219,4 +219,35 @@ document.addEventListener('DOMContentLoaded', function () {
                 .catch(function (err) { alert('Erro ao excluir: ' + err.message); });
         });
     });
+
+    // ── Criar fato ──────────────────────────────────────────
+    var formFato = document.getElementById('form-criar-fato');
+    if (formFato) {
+        formFato.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var form = e.target;
+            var data = {
+                projeto: form.projeto.value,
+                categoria: form.categoria.value,
+                fato: form.fato.value
+            };
+            apiCall('/api/fatos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            }).then(function () { location.reload(); })
+              .catch(function (err) { alert('Erro ao registrar fato: ' + err.message); });
+        });
+    }
+
+    // ── Excluir fato ────────────────────────────────────────
+    document.querySelectorAll('[data-excluir-fato]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.getAttribute('data-excluir-fato');
+            if (!confirm('Desativar fato #' + id + '?')) return;
+            apiCall('/api/fatos/' + id, { method: 'DELETE' })
+                .then(function () { location.reload(); })
+                .catch(function (err) { alert('Erro ao desativar: ' + err.message); });
+        });
+    });
 });

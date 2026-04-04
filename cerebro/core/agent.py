@@ -738,6 +738,12 @@ class AgenteGerente:
             if decisoes:
                 parts.append(f"\n── DECISÕES RECENTES ──\n{self._format_decisoes(decisoes)}")
 
+        # Fatos do projeto
+        if projeto:
+            fatos = models.listar_fatos(projeto)
+            if fatos:
+                parts.append(f"\n── FATOS DO PROJETO ──\n{self._format_fatos(fatos)}")
+
         return "\n".join(parts)
 
     def _load_skill(self, projeto: str) -> str | None:
@@ -764,6 +770,12 @@ class AgenteGerente:
         lines = []
         for d in decisoes:
             lines.append(f"[{d['data']}] {d['decisao']}")
+        return "\n".join(lines)
+
+    def _format_fatos(self, fatos: list[dict]) -> str:
+        lines = []
+        for f in fatos:
+            lines.append(f"[{f['categoria'].upper()}] {f['fato']}")
         return "\n".join(lines)
 
     def _extract_text(self, response) -> str:

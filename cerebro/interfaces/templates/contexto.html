@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Contexto{% endblock %}
+{% block content %}
+<h2>Contexto dos Agentes</h2>
+
+<!-- Formulário criar fato -->
+<details>
+    <summary><strong>+ Adicionar Fato</strong></summary>
+    <form class="form-inline" id="form-criar-fato">
+        <div class="form-group">
+            <label>Projeto</label>
+            <select name="projeto" required>
+                {% for slug, info in projetos.items() %}
+                <option value="{{ slug }}">{{ info.emoji }} {{ info.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Categoria</label>
+            <input type="text" name="categoria" list="categorias-sugestoes" required placeholder="sobre, meta, restricao...">
+            <datalist id="categorias-sugestoes">
+                <option value="sobre">
+                <option value="meta">
+                <option value="restricao">
+                <option value="processo">
+                <option value="contato">
+            </datalist>
+        </div>
+        <div class="form-group form-group-wide">
+            <label>Fato</label>
+            <textarea name="fato" required placeholder="Informação que os agentes devem saber..." rows="2"></textarea>
+        </div>
+        <div class="form-group">
+            <button type="submit">Adicionar</button>
+        </div>
+    </form>
+</details>
+
+<!-- Filtros -->
+<form method="get" role="group">
+    <select name="projeto" data-autosubmit>
+        <option value="">Todos os projetos</option>
+        {% for slug, info in projetos.items() %}
+        <option value="{{ slug }}" {% if projeto_filtro == slug %}selected{% endif %}>{{ info.emoji }} {{ info.nome }}</option>
+        {% endfor %}
+    </select>
+</form>
+
+<!-- Tabela de fatos -->
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Projeto</th>
+            <th>Categoria</th>
+            <th>Fato</th>
+            <th>Criado em</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for f in fatos %}
+        <tr>
+            <td>{{ f.id }}</td>
+            <td>{{ f.projeto | upper }}</td>
+            <td><span class="badge">{{ f.categoria }}</span></td>
+            <td>{{ f.fato }}</td>
+            <td>{{ f.criado_em[:10] if f.criado_em else '—' }}</td>
+            <td>
+                <button class="btn-excluir" data-excluir-fato="{{ f.id }}">✕</button>
+            </td>
+        </tr>
+        {% endfor %}
+        {% if not fatos %}
+        <tr><td colspan="6">Nenhum fato registrado. Adicione contexto para seus agentes!</td></tr>
+        {% endif %}
+    </tbody>
+</table>
+
+<!-- Skills dos projetos -->
+<h3>Skills dos Projetos</h3>
+<p><small>Arquivos .md que definem o conhecimento base de cada projeto (somente leitura).</small></p>
+{% for skill in skills %}
+<details>
+    <summary><strong>{{ skill.nome }}</strong></summary>
+    <pre class="output">{{ skill.conteudo }}</pre>
+</details>
+{% endfor %}
+{% if not skills %}
+<p>Nenhuma skill encontrada.</p>
+{% endif %}
+{% endblock %}
