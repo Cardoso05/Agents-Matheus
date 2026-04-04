@@ -16,7 +16,7 @@ from cerebro.db.metricas import metricas_periodo, custo_periodo, erros_recentes
 from cerebro.db.conversas import historico_sessao
 from cerebro.db import models_finance
 from cerebro.integrations import calendar
-from cerebro.core.config import PROJETOS, SKILLS_DIR
+from cerebro.core.config import PROJETOS, SKILLS_DIR, PROJETO_ALIASES
 from cerebro.core.deterministic import (
     status_geral,
     top_n_do_dia,
@@ -547,4 +547,32 @@ def page_contexto(request: Request, projeto: str | None = None):
         "skills": skills,
         "projeto_filtro": projeto,
         "projetos": PROJETOS,
+    })
+
+
+@app.get("/sistema", response_class=HTMLResponse)
+def page_sistema(request: Request):
+    # Skills com descricao (primeira linha do conteudo)
+    skills_info = []
+    for md_file in sorted(SKILLS_DIR.glob("*.md")):
+        conteudo = md_file.read_text(encoding="utf-8")
+        primeira_linha = ""
+        for line in conteudo.split("\n"):
+            line = line.strip()
+            if line and not line.startswith("#"):
+                primeira_linha = line
+                break
+        skills_info.append({"nome": md_file.stem, "descricao": primeira_linha})
+
+    # Aliases agrupados por projeto
+    aliases_por_projeto: dict[str, list[str]] = {}
+    for alias, projeto in PROJETO_ALIASES.items():
+        if alias != projeto:
+            aliases_por_projeto.setdefault(projeto, []).append(alias)
+    aliases_str = {p: ", ".join(a) for p, a in aliases_por_projeto.items()}
+
+    return templates.TemplateResponse(request, "sistema.html", {
+        "projetos": PROJETOS,
+        "skills": skills_info,
+        "aliases": aliases_str,
     })

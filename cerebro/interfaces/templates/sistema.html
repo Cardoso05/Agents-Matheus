@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+{% block title %}Sistema{% endblock %}
+{% block content %}
+<style>
+    .system-section { margin-bottom: 2rem; }
+    .system-section h3 { border-bottom: 2px solid var(--pico-primary); padding-bottom: 0.3rem; }
+    .schedule-table td:first-child { white-space: nowrap; font-weight: bold; }
+    .schedule-table td:nth-child(2) { white-space: nowrap; }
+    .tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem; }
+    .tool-card { border: 1px solid var(--pico-muted-border-color); border-radius: 8px; padding: 0.75rem; }
+    .tool-card strong { color: var(--pico-primary); }
+    .flow-step { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.5rem; }
+    .flow-step .step-num { background: var(--pico-primary); color: #fff; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; flex-shrink: 0; }
+    .fonte-tag { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.8rem; margin: 0.15rem; }
+    .fonte-db { background: #dbeafe; color: #1e40af; }
+    .fonte-api { background: #fef3c7; color: #92400e; }
+    .fonte-file { background: #d1fae5; color: #065f46; }
+    .fonte-llm { background: #ede9fe; color: #5b21b6; }
+</style>
+
+<h2>Como o Sistema Funciona</h2>
+<p>Documentacao completa do Cerebro — o que roda, quando roda, e de onde vem cada informacao.</p>
+
+<!-- ── Visão Geral ─────────────────────────────────────── -->
+<div class="system-section">
+    <h3>Visao Geral</h3>
+    <p>O Cerebro e um sistema de gestao pessoal com <strong>3 servicos</strong> rodando simultaneamente:</p>
+    <table>
+        <thead><tr><th>Servico</th><th>Porta</th><th>O que faz</th></tr></thead>
+        <tbody>
+            <tr><td><strong>cerebro-bot</strong></td><td>—</td><td>Bot Telegram + Scheduler (jobs proativos agendados)</td></tr>
+            <tr><td><strong>cerebro-web</strong></td><td>8000</td><td>Dashboard web (esta interface) + API REST</td></tr>
+            <tr><td><strong>cerebro-deploy</strong></td><td>9000</td><td>Webhook listener para deploy automatico via GitHub</td></tr>
+        </tbody>
+    </table>
+    <p>Nginx faz proxy reverso com SSL (HTTPS) + basic auth para todas as rotas exceto webhooks.</p>
+</div>
+
+<!-- ── Fluxo de Mensagens ──────────────────────────────── -->
+<div class="system-section">
+    <h3>Fluxo de uma Mensagem</h3>
+    <p>Quando voce envia uma mensagem no Telegram, o sistema segue este fluxo:</p>
+    <div class="flow-step"><span class="step-num">1</span><span><strong>Telegram Bot</strong> recebe a mensagem e verifica autorizacao</span></div>
+    <div class="flow-step"><span class="step-num">2</span><span><strong>Classificador</strong> analisa o texto com regex para detectar intencao (financeiro? tarefa? status?)</span></div>
+    <div class="flow-step"><span class="step-num">3a</span><span>Se detectou intencao simples → <strong>Funcao deterministica</strong> responde instantaneamente (sem LLM, custo zero)</span></div>
+    <div class="flow-step"><span class="step-num">3b</span><span>Se nao detectou → <strong>Agente LLM</strong> (Claude Sonnet 4) processa com tools e contexto do projeto</span></div>
+    <div class="flow-step"><span class="step-num">4</span><span>Resposta enviada de volta pelo Telegram</span></div>
+    <p><small>O classificador prioriza respostas deterministicas para economizar tokens. Aproximadamente 60-70% das mensagens sao resolvidas sem LLM.</small></p>
+</div>
+
+<!-- ── Classificador ───────────────────────────────────── -->
+<div class="system-section">
+    <h3>Classificador de Mensagens</h3>
+    <p>Regras avaliadas em ordem de prioridade (primeira que bate, executa):</p>
+    <table>
+        <thead><tr><th>Padrao</th><th>Exemplo</th><th>Acao</th></tr></thead>
+        <tbody>
+            <tr><td>Nome do projeto</td><td>"WIPR"</td><td>Lista pendencias do projeto</td></tr>
+            <tr><td>Financeiro</td><td>"resumo financeiro", "quanto gastei"</td><td>Resumo de receitas/despesas do mes</td></tr>
+            <tr><td>Atrasadas</td><td>"atrasadas", "vencido"</td><td>Lista tarefas atrasadas</td></tr>
+            <tr><td>Contas</td><td>"contas a pagar", "vence amanha"</td><td>Lista compromissos a vencer</td></tr>
+            <tr><td>Status</td><td>"status geral", "como ta tudo"</td><td>Visao geral de todos os projetos</td></tr>
+            <tr><td>Top 3</td><td>"o que faco", "prioridade"</td><td>Top 3-5 tarefas mais urgentes do dia</td></tr>
+            <tr><td>Concluir</td><td>"fiz #123", "conclui tarefa 45"</td><td>Marca tarefa como concluida</td></tr>
+            <tr><td>Criar tarefa</td><td>"cria tarefa: revisar proposta"</td><td>Cria nova pendencia</td></tr>
+            <tr><td>Review semanal</td><td>"review semanal"</td><td>Resumo da semana completa</td></tr>
+            <tr><td>Agenda</td><td>"agenda da semana"</td><td>Eventos do calendario</td></tr>
+            <tr><td>Gasto rapido</td><td>"gastei 45 no almoco"</td><td>Registra despesa + auto-categoriza</td></tr>
+            <tr><td>Receita rapida</td><td>"recebi 700 da gruta"</td><td>Registra receita + auto-categoriza</td></tr>
+            <tr><td><em>Qualquer outro</em></td><td><em>"preciso de ajuda com..."</em></td><td><em>Agente LLM assume</em></td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- ── Horarios ─────────────────────────────────────────── -->
+<div class="system-section">
+    <h3>Horarios dos Jobs Automaticos</h3>
+    <p>O scheduler roda dentro do <code>cerebro-bot</code> e dispara notificacoes automaticas no Telegram:</p>
+
+    <h4>Diarios</h4>
+    <table class="schedule-table">
+        <thead><tr><th>Horario</th><th>Job</th><th>O que faz</th><th>Tipo</th></tr></thead>
+        <tbody>
+            <tr><td>08:00</td><td>Cobranca matinal</td><td>Top 3 tarefas do dia + tarefas atrasadas</td><td><span class="fonte-tag fonte-db">Deterministico</span></td></tr>
+            <tr><td>09:00</td><td>Contas vencidas</td><td>Alerta se ha contas vencidas</td><td><span class="fonte-tag fonte-db">Deterministico</span></td></tr>
+            <tr><td>10:00</td><td>Delegacoes</td><td>Delegacoes sem resposta ha 3+ dias</td><td><span class="fonte-tag fonte-db">Deterministico</span></td></tr>
+            <tr><td>12:00</td><td>Atrasadas</td><td>Lembrete de tarefas atrasadas</td><td><span class="fonte-tag fonte-db">Deterministico</span></td></tr>
+            <tr><td>16:00</td><td>Pre-faculdade</td><td>Pendencias da faculdade (seg/qui/sex)</td><td><span class="fonte-tag fonte-db">Deterministico</span></td></tr>
+            <tr><td>18:00</td><td>Atrasadas</td><td>Segundo lembrete de atrasadas</td><td><span class="fonte-tag fonte-db">Deterministico</span></td></tr>
+            <tr><td>20:00</td><td>Contas a vencer</td><td>Contas vencendo amanha</td><td><span class="fonte-tag fonte-db">Deterministico</span></td></tr>
+        </tbody>
+    </table>
+
+    <h4>Semanais</h4>
+    <table class="schedule-table">
+        <thead><tr><th>Dia/Hora</th><th>Job</th><th>O que faz</th><th>Tipo</th></tr></thead>
+        <tbody>
+            <tr><td>Seg 09:00</td><td>Projetos parados</td><td>Alerta projetos sem atividade ha 5+ dias</td><td><span class="fonte-tag fonte-db">Deterministico</span></td></tr>
+            <tr><td>Dom 18:00</td><td>Revisao de contexto</td><td>Revisa fatos de cada projeto com base nas conversas da semana</td><td><span class="fonte-tag fonte-llm">Usa LLM</span></td></tr>
+            <tr><td>Dom 19:00</td><td>Resumo financeiro</td><td>Resumo semanal de financas</td><td><span class="fonte-tag fonte-db">Deterministico</span></td></tr>
+            <tr><td>Dom 20:00</td><td>Review semanal</td><td>Review completa da semana</td><td><span class="fonte-tag fonte-llm">Usa LLM</span></td></tr>
+        </tbody>
+    </table>
+
+    <h4>Continuo</h4>
+    <table class="schedule-table">
+        <thead><tr><th>Intervalo</th><th>Job</th><th>O que faz</th></tr></thead>
+        <tbody>
+            <tr><td>A cada 30s</td><td>Processar fila</td><td>Dequeue e executa o proximo job pendente (workers de background)</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- ── De Onde Vem as Informações ──────────────────────── -->
+<div class="system-section">
+    <h3>De Onde Vem as Informacoes</h3>
+
+    <h4>Banco de Dados (SQLite local)</h4>
+    <div class="tool-grid">
+        <div class="tool-card">
+            <strong>pendencias</strong><br>
+            <small>Tarefas com projeto, prioridade (P1-P5), prazo, status, responsavel, delegado_para</small>
+        </div>
+        <div class="tool-card">
+            <strong>eventos</strong><br>
+            <small>Calendario de eventos (sincroniza com Google Calendar)</small>
+        </div>
+        <div class="tool-card">
+            <strong>decisoes</strong><br>
+            <small>Decisoes registradas por projeto (imutaveis, trilha de auditoria)</small>
+        </div>
+        <div class="tool-card">
+            <strong>fatos_projeto</strong><br>
+            <small>Conhecimento permanente por projeto (categoria: sobre, meta, restricao, processo, contato)</small>
+        </div>
+        <div class="tool-card">
+            <strong>stakeholders</strong><br>
+            <small>Pessoas envolvidas em cada projeto + papel e contato</small>
+        </div>
+        <div class="tool-card">
+            <strong>conversas</strong><br>
+            <small>Historico de mensagens por sessao (multi-turn memory)</small>
+        </div>
+        <div class="tool-card">
+            <strong>lancamentos</strong><br>
+            <small>Transacoes financeiras (tipo, valor, categoria, projeto, data)</small>
+        </div>
+        <div class="tool-card">
+            <strong>compromissos</strong><br>
+            <small>Contas a pagar/receber (vencimento, status, parcelas)</small>
+        </div>
+        <div class="tool-card">
+            <strong>jobs</strong><br>
+            <small>Fila de trabalhos de background (status: pendente → executando → concluido/erro)</small>
+        </div>
+        <div class="tool-card">
+            <strong>metricas</strong><br>
+            <small>Uso do sistema: tokens consumidos, duracao, taxa de sucesso, erros</small>
+        </div>
+    </div>
+
+    <h4>Arquivos Estaticos (Skills)</h4>
+    <p>Arquivos <code>.md</code> em <code>cerebro/skills/</code> que sao injetados no prompt do agente:</p>
+    <table>
+        <thead><tr><th>Arquivo</th><th>Conteudo</th></tr></thead>
+        <tbody>
+            {% for skill in skills %}
+            <tr><td><code>{{ skill.nome }}.md</code></td><td>{{ skill.descricao }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h4>APIs Externas</h4>
+    <table>
+        <thead><tr><th>Integracao</th><th>Para que serve</th><th>Quando e usada</th></tr></thead>
+        <tbody>
+            <tr>
+                <td><span class="fonte-tag fonte-api">Anthropic API</span></td>
+                <td>Claude Sonnet 4 — agente principal + todos os workers</td>
+                <td>Mensagens complexas, jobs de background, revisao de contexto</td>
+            </tr>
+            <tr>
+                <td><span class="fonte-tag fonte-api">Telegram API</span></td>
+                <td>Interface principal do usuario</td>
+                <td>Receber mensagens + enviar notificacoes proativas</td>
+            </tr>
+            <tr>
+                <td><span class="fonte-tag fonte-api">Google Calendar</span></td>
+                <td>Sincroniza eventos do calendario</td>
+                <td>Criar/listar eventos via agente ou dashboard</td>
+            </tr>
+            <tr>
+                <td><span class="fonte-tag fonte-api">Brave Search</span></td>
+                <td>Busca web para pesquisas</td>
+                <td>Tool buscar_web do agente + worker de pesquisa</td>
+            </tr>
+            <tr>
+                <td><span class="fonte-tag fonte-api">Supabase</span></td>
+                <td>Sincroniza dados financeiros com o FinBot</td>
+                <td>Dual-write: toda transacao financeira e espelhada</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- ── Tools do Agente ──────────────────────────────────── -->
+<div class="system-section">
+    <h3>Tools do Agente Principal</h3>
+    <p>Quando o classificador nao resolve, o agente LLM assume com acesso a <strong>21 tools</strong>:</p>
+
+    <h4>Gestao de Tarefas</h4>
+    <div class="tool-grid">
+        <div class="tool-card"><strong>criar_pendencia</strong><br><small>Cria nova tarefa com projeto, prioridade, prazo</small></div>
+        <div class="tool-card"><strong>concluir_pendencia</strong><br><small>Marca tarefa como concluida por ID</small></div>
+        <div class="tool-card"><strong>atualizar_pendencia</strong><br><small>Modifica campos de uma tarefa existente</small></div>
+        <div class="tool-card"><strong>listar_pendencias</strong><br><small>Consulta tarefas com filtros</small></div>
+        <div class="tool-card"><strong>delegar_tarefa</strong><br><small>Delega tarefa + gera mensagem de delegacao</small></div>
+        <div class="tool-card"><strong>cobrar_delegacao</strong><br><small>Gera mensagem de cobranca para delegacoes atrasadas</small></div>
+    </div>
+
+    <h4>Conhecimento</h4>
+    <div class="tool-grid">
+        <div class="tool-card"><strong>registrar_decisao</strong><br><small>Registra decisao com contexto e participantes</small></div>
+        <div class="tool-card"><strong>consultar_decisoes</strong><br><small>Consulta decisoes recentes de um projeto</small></div>
+        <div class="tool-card"><strong>registrar_fato</strong><br><small>Registra fato permanente sobre um projeto</small></div>
+        <div class="tool-card"><strong>listar_stakeholders</strong><br><small>Lista pessoas envolvidas e seus papeis</small></div>
+    </div>
+
+    <h4>Calendario</h4>
+    <div class="tool-grid">
+        <div class="tool-card"><strong>criar_evento_calendar</strong><br><small>Cria evento + sincroniza com Google Calendar</small></div>
+        <div class="tool-card"><strong>listar_eventos_calendar</strong><br><small>Consulta eventos por data ou semana</small></div>
+    </div>
+
+    <h4>Financeiro</h4>
+    <div class="tool-grid">
+        <div class="tool-card"><strong>registrar_lancamento</strong><br><small>Registra receita ou despesa com categoria</small></div>
+        <div class="tool-card"><strong>listar_lancamentos</strong><br><small>Consulta transacoes com filtros</small></div>
+        <div class="tool-card"><strong>resumo_financeiro</strong><br><small>Resumo mensal de receitas vs despesas</small></div>
+        <div class="tool-card"><strong>registrar_compromisso</strong><br><small>Registra conta a pagar/receber</small></div>
+        <div class="tool-card"><strong>listar_compromissos</strong><br><small>Consulta contas por status</small></div>
+    </div>
+
+    <h4>Jobs e Pesquisa</h4>
+    <div class="tool-grid">
+        <div class="tool-card"><strong>criar_job</strong><br><small>Cria job de background (pesquisa, auditoria, relatorio, etc.)</small></div>
+        <div class="tool-card"><strong>consultar_jobs</strong><br><small>Consulta status dos jobs</small></div>
+        <div class="tool-card"><strong>buscar_web</strong><br><small>Pesquisa na web via Brave Search</small></div>
+        <div class="tool-card"><strong>ler_arquivo</strong><br><small>Le arquivo do projeto (path restrito por seguranca)</small></div>
+    </div>
+</div>
+
+<!-- ── Workers ──────────────────────────────────────────── -->
+<div class="system-section">
+    <h3>Workers de Background</h3>
+    <p>Quando o agente cria um job via <code>criar_job</code>, ele e processado por um worker especializado a cada 30s:</p>
+    <table>
+        <thead><tr><th>Tipo</th><th>O que faz</th><th>Tools disponiveis</th></tr></thead>
+        <tbody>
+            <tr><td><strong>revisao_codigo</strong></td><td>Review de codigo com analise de seguranca e performance</td><td>ler_arquivo, listar_arquivos</td></tr>
+            <tr><td><strong>pesquisa</strong></td><td>Pesquisa web com citacoes de fontes</td><td>buscar_web, ler_arquivo</td></tr>
+            <tr><td><strong>geracao_conteudo</strong></td><td>Gera propostas, emails, relatorios profissionais</td><td>consultar_decisoes, listar_pendencias</td></tr>
+            <tr><td><strong>relatorio</strong></td><td>Relatorios de projeto com metricas e analise</td><td>status_geral, resumo_semanal, listar_pendencias, consultar_decisoes</td></tr>
+            <tr><td><strong>analise_dados</strong></td><td>Analise de dados com benchmarks e insights</td><td>status_geral, resumo_semanal, listar_pendencias, buscar_web, ler_arquivo</td></tr>
+            <tr><td><strong>auditoria</strong></td><td>Verifica consistencia e identifica problemas</td><td>listar_pendencias, atrasadas, delegacoes_pendentes, consultar_decisoes</td></tr>
+            <tr><td><strong>revisao_contexto</strong></td><td>Atualiza fatos dos projetos semanalmente</td><td>listar_fatos, consultar_decisoes, listar_pendencias, registrar_fato, desativar_fato</td></tr>
+        </tbody>
+    </table>
+    <p><small>Limites: max 50.000 tokens, 30 tool calls, timeout 15 min por job. Modelo: Claude Sonnet 4.</small></p>
+</div>
+
+<!-- ── Projetos ─────────────────────────────────────────── -->
+<div class="system-section">
+    <h3>Projetos Configurados</h3>
+    <table>
+        <thead><tr><th>Projeto</th><th>Slug</th><th>Prioridade</th><th>Aliases (reconhecidos pelo classificador)</th></tr></thead>
+        <tbody>
+            {% for slug, info in projetos.items() %}
+            <tr>
+                <td>{{ info.emoji }} <strong>{{ info.nome }}</strong></td>
+                <td><code>{{ slug }}</code></td>
+                <td>P{{ info.prioridade }}</td>
+                <td><small>{{ aliases.get(slug, slug) }}</small></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- ── Prompt do Agente ─────────────────────────────────── -->
+<div class="system-section">
+    <h3>Como o Agente Monta o Contexto</h3>
+    <p>Quando o agente LLM e acionado, o system prompt e montado em camadas:</p>
+    <div class="flow-step"><span class="step-num">1</span><span><strong>Prompt base</strong> — Regras gerais, prioridades, tom de voz <span class="fonte-tag fonte-file">Hardcoded</span></span></div>
+    <div class="flow-step"><span class="step-num">2</span><span><strong>Skill do projeto</strong> — Arquivo .md com contexto especifico (pessoas, status, regras) <span class="fonte-tag fonte-file">Arquivo</span></span></div>
+    <div class="flow-step"><span class="step-num">3</span><span><strong>Pendencias atuais</strong> — Tarefas pendentes do projeto <span class="fonte-tag fonte-db">Banco</span></span></div>
+    <div class="flow-step"><span class="step-num">4</span><span><strong>Decisoes recentes</strong> — Ultimas 5 decisoes registradas <span class="fonte-tag fonte-db">Banco</span></span></div>
+    <div class="flow-step"><span class="step-num">5</span><span><strong>Fatos do projeto</strong> — Conhecimento permanente da tabela fatos_projeto <span class="fonte-tag fonte-db">Banco</span></span></div>
+    <div class="flow-step"><span class="step-num">6</span><span><strong>Historico da conversa</strong> — Ultimas mensagens da sessao atual <span class="fonte-tag fonte-db">Banco</span></span></div>
+    <p><small>Total estimado: ~3.000-5.000 tokens de contexto por mensagem, dependendo do projeto.</small></p>
+</div>
+
+<!-- ── Auto-Categorização ──────────────────────────────── -->
+<div class="system-section">
+    <h3>Auto-Categorizacao Financeira</h3>
+    <p>Quando voce diz "gastei 45 no iFood", o sistema auto-categoriza pela descricao:</p>
+    <table>
+        <thead><tr><th>Categoria</th><th>Palavras-chave reconhecidas</th></tr></thead>
+        <tbody>
+            <tr><td>Alimentacao</td><td>ifood, uber eats, restaurante, padaria, cafe, almoco, janta</td></tr>
+            <tr><td>Transporte</td><td>uber, 99, gasolina, pedagio, metro, onibus</td></tr>
+            <tr><td>Material</td><td>intelbras, furukawa, cabo, camera, nvr</td></tr>
+            <tr><td>Infra</td><td>hostinger, dominio, servidor, aws, api</td></tr>
+            <tr><td>Marketing</td><td>meta ads, facebook ads, campanha, trafego</td></tr>
+            <tr><td>Assinatura</td><td>netflix, spotify, chatgpt, youtube premium</td></tr>
+            <tr><td>Educacao</td><td>unifesp, faculdade, livro, curso</td></tr>
+            <tr><td>Saude</td><td>farmacia, academia, dentista, natacao</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- ── Comandos Telegram ───────────────────────────────── -->
+<div class="system-section">
+    <h3>Comandos do Telegram</h3>
+    <table>
+        <thead><tr><th>Comando</th><th>O que faz</th></tr></thead>
+        <tbody>
+            <tr><td><code>/start</code></td><td>Inicia o bot, mostra mensagem de boas-vindas</td></tr>
+            <tr><td><code>/status</code></td><td>Visao geral de todos os projetos</td></tr>
+            <tr><td><code>/top3</code></td><td>Top 3 tarefas mais urgentes do dia</td></tr>
+            <tr><td><code>/atrasadas</code></td><td>Lista tarefas atrasadas</td></tr>
+            <tr><td><code>/semanal</code></td><td>Review semanal completa</td></tr>
+            <tr><td><em>Texto livre</em></td><td>Classificador analisa e roteia para funcao ou agente LLM</td></tr>
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}
