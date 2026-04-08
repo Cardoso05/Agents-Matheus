@@ -14,8 +14,9 @@ MAX_NOTIFICACOES_POR_CICLO = 3
 class TriggerEngine:
     """Avalia triggers condicionais e retorna mensagens de notificação."""
 
-    def __init__(self, conn):
+    def __init__(self, conn, check_silencio: bool = True):
         self.conn = conn
+        self.check_silencio = check_silencio
 
     def avaliar_todos(self) -> list[str]:
         """Avalia todos os triggers ativos. Retorna lista de mensagens."""
@@ -29,7 +30,7 @@ class TriggerEngine:
             try:
                 if not self._esta_ativo(trigger):
                     continue
-                if self._em_silencio(trigger):
+                if self.check_silencio and self._em_silencio(trigger):
                     continue
                 if self._em_cooldown(trigger):
                     continue

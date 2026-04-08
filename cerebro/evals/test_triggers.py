@@ -137,7 +137,7 @@ class TestTriggerT10SemanaSemConcluir:
 
 class TestTriggerEngine:
     def test_engine_sem_dados_nao_notifica(self, conn):
-        engine = TriggerEngine(conn)
+        engine = TriggerEngine(conn, check_silencio=False)
         msgs = engine.avaliar_todos()
         assert msgs == []
 
@@ -145,7 +145,7 @@ class TestTriggerEngine:
         # Criar dados que disparam T05
         for i in range(3):
             _inserir_pendencia(conn, tarefa=f"T{i}", projeto="erp")
-        engine = TriggerEngine(conn)
+        engine = TriggerEngine(conn, check_silencio=False)
 
         msgs1 = engine.avaliar_todos()
         t05_disparou = any("sem prazo" in m.lower() for m in msgs1)
@@ -160,7 +160,7 @@ class TestTriggerEngine:
         for i in range(3):
             _inserir_pendencia(conn, tarefa=f"T{i}", projeto="erp")
         toggle_trigger(conn, "T05", False)
-        engine = TriggerEngine(conn)
+        engine = TriggerEngine(conn, check_silencio=False)
         msgs = engine.avaliar_todos()
         t05_disparou = any("sem prazo" in m.lower() for m in msgs)
         assert not t05_disparou
@@ -169,7 +169,7 @@ class TestTriggerEngine:
         for i in range(3):
             _inserir_pendencia(conn, tarefa=f"T{i}", projeto="erp")
         pausar_trigger(conn, "T05", dias=7)
-        engine = TriggerEngine(conn)
+        engine = TriggerEngine(conn, check_silencio=False)
         msgs = engine.avaliar_todos()
         t05_disparou = any("sem prazo" in m.lower() for m in msgs)
         assert not t05_disparou
@@ -182,7 +182,7 @@ class TestTriggerEngine:
                 conn, tarefa=f"Definir algo {i}", projeto="wipr",
                 prioridade=1, atualizado_em=antigo, criado_em=antigo,
             )
-        engine = TriggerEngine(conn)
+        engine = TriggerEngine(conn, check_silencio=False)
         msgs = engine.avaliar_todos()
         # Deve ter no máximo MAX + 1 (o resumo)
         assert len(msgs) <= 4
