@@ -4,11 +4,13 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+import math
+
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from cerebro.db.setup import init_db
 from cerebro.db import models, jobs as jobs_db
@@ -55,7 +57,7 @@ def _verify_api_key(request: Request):
 class NovaPendencia(BaseModel):
     tarefa: str
     projeto: str
-    prioridade: int = 3
+    prioridade: int = Field(3, ge=1, le=5)
     prazo: str | None = None
     responsavel: str = "matheus"
     notas: str | None = None
@@ -100,12 +102,21 @@ class NovoCompromisso(BaseModel):
 class AtualizarPendencia(BaseModel):
     tarefa: str | None = Field(None, max_length=500)
     projeto: str | None = Field(None, max_length=50)
-    prioridade: int | None = None
+    prioridade: int | None = Field(None, ge=1, le=5)
     prazo: str | None = None
     status: str | None = None
     responsavel: str | None = Field(None, max_length=100)
     delegado_para: str | None = Field(None, max_length=100)
     notas: str | None = Field(None, max_length=2000)
+
+    @field_validator("status")
+    @classmethod
+    def validar_status(cls, v):
+        if v is not None:
+            valid = {"pendente", "em_andamento", "bloqueada", "concluida", "cancelada"}
+            if v not in valid:
+                raise ValueError(f"Status inválido. Use: {', '.join(sorted(valid))}")
+        return v
 
 
 class AtualizarEvento(BaseModel):
@@ -147,7 +158,7 @@ def api_status():
                   COUNT(*) as total,
                   SUM(CASE WHEN prazo < date('now') THEN 1 ELSE 0 END) as atrasadas,
                   SUM(CASE WHEN prioridade <= 2 THEN 1 ELSE 0 END) as urgentes
-           FROM pendencias WHERE status = 'pendente' GROUP BY projeto"""
+           FROM pendencias WHERE status IN ('pendente', 'em_andamento', 'bloqueada') GROUP BY projeto"""
     ).fetchall()
 
     projetos_status = []
@@ -177,8 +188,16 @@ def api_pendencias(
     projeto: str | None = None,
     status: str | None = None,
     responsavel: str | None = None,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
 ):
-    return models.listar_pendencias(projeto=projeto, status=status, responsavel=responsavel)
+    offset = (page - 1) * per_page
+    items = models.listar_pendencias(
+        projeto=projeto, status=status, responsavel=responsavel,
+        limite=per_page, offset=offset,
+    )
+    total = models.contar_pendencias(projeto=projeto, status=status, responsavel=responsavel)
+    return {"items": items, "page": page, "per_page": per_page, "total": total}
 
 
 @app.post("/api/pendencias", dependencies=[Depends(_verify_api_key)])
@@ -192,6 +211,30 @@ def api_criar_pendencia(p: NovaPendencia):
 @app.put("/api/pendencias/{id}/concluir", dependencies=[Depends(_verify_api_key)])
 def api_concluir_pendencia(id: int):
     result = models.concluir_pendencia(id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Pendência não encontrada")
+    return result
+
+
+@app.put("/api/pendencias/{id}/iniciar", dependencies=[Depends(_verify_api_key)])
+def api_iniciar_pendencia(id: int):
+    result = models.iniciar_pendencia(id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Pendência não encontrada")
+    return result
+
+
+@app.put("/api/pendencias/{id}/bloquear", dependencies=[Depends(_verify_api_key)])
+def api_bloquear_pendencia(id: int):
+    result = models.bloquear_pendencia(id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Pendência não encontrada")
+    return result
+
+
+@app.put("/api/pendencias/{id}/cancelar", dependencies=[Depends(_verify_api_key)])
+def api_cancelar_pendencia(id: int):
+    result = models.cancelar_pendencia(id)
     if not result:
         raise HTTPException(status_code=404, detail="Pendência não encontrada")
     return result
@@ -423,13 +466,28 @@ def page_dashboard(request: Request):
 
 
 @app.get("/pendencias", response_class=HTMLResponse)
-def page_pendencias(request: Request, projeto: str | None = None, status: str | None = None):
-    pendencias = models.listar_pendencias(projeto=projeto, status=status or "pendente")
+def page_pendencias(
+    request: Request,
+    projeto: str | None = None,
+    status: str | None = None,
+    page: int = Query(1, ge=1),
+):
+    per_page = 50
+    status_filtro = status or "pendente"
+    offset = (page - 1) * per_page
+    pendencias = models.listar_pendencias(
+        projeto=projeto, status=status_filtro, limite=per_page, offset=offset,
+    )
+    total = models.contar_pendencias(projeto=projeto, status=status_filtro)
+    total_pages = max(1, math.ceil(total / per_page))
     return templates.TemplateResponse(request, "pendencias.html", {
         "pendencias": pendencias,
         "projeto_filtro": projeto,
-        "status_filtro": status or "pendente",
+        "status_filtro": status_filtro,
         "projetos": PROJETOS,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
     })
 
 

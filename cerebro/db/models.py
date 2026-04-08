@@ -5,6 +5,10 @@ from datetime import datetime
 from cerebro.db.setup import get_connection
 
 
+VALID_STATUSES = {"pendente", "em_andamento", "bloqueada", "concluida", "cancelada"}
+VALID_PRIORIDADES = range(1, 6)  # 1 a 5
+
+
 def _row_to_dict(row) -> dict | None:
     if row is None:
         return None
@@ -27,6 +31,8 @@ def criar_pendencia(
     notas: str | None = None,
     conn=None,
 ) -> dict:
+    if prioridade not in VALID_PRIORIDADES:
+        raise ValueError(f"Prioridade inválida: {prioridade}. Use 1-5.")
     conn = conn or get_connection()
     cursor = conn.execute(
         """INSERT INTO pendencias (tarefa, projeto, prioridade, prazo, responsavel, notas)
@@ -47,6 +53,70 @@ def get_pendencia(id: int, conn=None) -> dict | None:
     conn = conn or get_connection()
     row = conn.execute("SELECT * FROM pendencias WHERE id = ?", (id,)).fetchone()
     return _row_to_dict(row)
+
+
+def iniciar_pendencia(id: int, conn=None) -> dict | None:
+    """Marca pendência como em andamento."""
+    conn = conn or get_connection()
+    pendencia = get_pendencia(id, conn)
+    if not pendencia:
+        return None
+    now = datetime.now().isoformat()
+    conn.execute(
+        "UPDATE pendencias SET status = 'em_andamento', atualizado_em = ? WHERE id = ?",
+        (now, id),
+    )
+    conn.execute(
+        """INSERT INTO historico (pendencia_id, projeto, acao, detalhes)
+           VALUES (?, ?, 'iniciada', ?)""",
+        (id, pendencia["projeto"], pendencia["tarefa"]),
+    )
+    conn.commit()
+    return get_pendencia(id, conn)
+
+
+def bloquear_pendencia(id: int, motivo: str | None = None, conn=None) -> dict | None:
+    """Marca pendência como bloqueada."""
+    conn = conn or get_connection()
+    pendencia = get_pendencia(id, conn)
+    if not pendencia:
+        return None
+    now = datetime.now().isoformat()
+    # Append motivo às notas se fornecido
+    notas = pendencia.get("notas") or ""
+    if motivo:
+        notas = f"{notas}\n[BLOQUEIO] {motivo}".strip()
+    conn.execute(
+        "UPDATE pendencias SET status = 'bloqueada', notas = ?, atualizado_em = ? WHERE id = ?",
+        (notas, now, id),
+    )
+    conn.execute(
+        """INSERT INTO historico (pendencia_id, projeto, acao, detalhes)
+           VALUES (?, ?, 'bloqueada', ?)""",
+        (id, pendencia["projeto"], motivo or pendencia["tarefa"]),
+    )
+    conn.commit()
+    return get_pendencia(id, conn)
+
+
+def cancelar_pendencia(id: int, conn=None) -> dict | None:
+    """Marca pendência como cancelada."""
+    conn = conn or get_connection()
+    pendencia = get_pendencia(id, conn)
+    if not pendencia:
+        return None
+    now = datetime.now().isoformat()
+    conn.execute(
+        "UPDATE pendencias SET status = 'cancelada', atualizado_em = ? WHERE id = ?",
+        (now, id),
+    )
+    conn.execute(
+        """INSERT INTO historico (pendencia_id, projeto, acao, detalhes)
+           VALUES (?, ?, 'cancelada', ?)""",
+        (id, pendencia["projeto"], pendencia["tarefa"]),
+    )
+    conn.commit()
+    return get_pendencia(id, conn)
 
 
 def concluir_pendencia(id: int, conn=None) -> dict | None:
@@ -80,6 +150,11 @@ def atualizar_pendencia(id: int, conn=None, **campos) -> dict | None:
     if not updates:
         return pendencia
 
+    if "status" in updates and updates["status"] not in VALID_STATUSES:
+        raise ValueError(f"Status inválido: {updates['status']}. Use: {', '.join(sorted(VALID_STATUSES))}")
+    if "prioridade" in updates and updates["prioridade"] not in VALID_PRIORIDADES:
+        raise ValueError(f"Prioridade inválida: {updates['prioridade']}. Use 1-5.")
+
     updates["atualizado_em"] = datetime.now().isoformat()
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     values = list(updates.values()) + [id]
@@ -94,10 +169,34 @@ def atualizar_pendencia(id: int, conn=None, **campos) -> dict | None:
     return get_pendencia(id, conn)
 
 
+def contar_pendencias(
+    projeto: str | None = None,
+    status: str | None = None,
+    responsavel: str | None = None,
+    conn=None,
+) -> int:
+    """Conta pendências com os mesmos filtros de listar_pendencias."""
+    conn = conn or get_connection()
+    query = "SELECT COUNT(*) as n FROM pendencias WHERE 1=1"
+    params = []
+    if projeto:
+        query += " AND projeto = ?"
+        params.append(projeto)
+    if status:
+        query += " AND status = ?"
+        params.append(status)
+    if responsavel:
+        query += " AND responsavel = ?"
+        params.append(responsavel)
+    return conn.execute(query, params).fetchone()["n"]
+
+
 def listar_pendencias(
     projeto: str | None = None,
     status: str | None = None,
     responsavel: str | None = None,
+    limite: int | None = None,
+    offset: int = 0,
     conn=None,
 ) -> list[dict]:
     conn = conn or get_connection()
@@ -114,14 +213,17 @@ def listar_pendencias(
         query += " AND responsavel = ?"
         params.append(responsavel)
 
-    query += " ORDER BY prioridade ASC, prazo ASC"
+    query += " ORDER BY prioridade ASC, prazo IS NULL, prazo ASC"
+    if limite is not None:
+        query += " LIMIT ? OFFSET ?"
+        params.extend([limite, offset])
     rows = conn.execute(query, params).fetchall()
     result = _rows_to_list(rows)
 
     # Marcar atrasadas
     today = datetime.now().date().isoformat()
     for p in result:
-        p["atrasada"] = bool(p.get("prazo") and p["prazo"] < today and p["status"] == "pendente")
+        p["atrasada"] = bool(p.get("prazo") and p["prazo"] < today and p["status"] in ("pendente", "em_andamento"))
 
     return result
 

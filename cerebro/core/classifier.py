@@ -184,6 +184,39 @@ def classificar(mensagem: str) -> dict:
         logger.info("MSG=%s → handler=%s func=%s id=%d", msg[:80], result["handler"], result.get("func"), task_id)
         return result
 
+    # 4b. Iniciar tarefa
+    iniciar_match = re.search(
+        r"(comecei|iniciei|to fazendo|estou fazendo|começando|comecando)\b.*?(?:tarefa\s*)?#?(\d+)",
+        msg_lower,
+    )
+    if iniciar_match:
+        task_id = int(iniciar_match.group(2))
+        result = {"handler": "deterministic", "func": "iniciar_tarefa", "args": {"id": task_id}}
+        logger.info("MSG=%s → handler=%s func=%s id=%d", msg[:80], result["handler"], result.get("func"), task_id)
+        return result
+
+    # 4c. Bloquear tarefa
+    bloquear_match = re.search(
+        r"(travei|bloqueei|empacou|parei|bloqueada)\b.*?(?:tarefa\s*)?#?(\d+)",
+        msg_lower,
+    )
+    if bloquear_match:
+        task_id = int(bloquear_match.group(2))
+        result = {"handler": "deterministic", "func": "bloquear_tarefa", "args": {"id": task_id}}
+        logger.info("MSG=%s → handler=%s func=%s id=%d", msg[:80], result["handler"], result.get("func"), task_id)
+        return result
+
+    # 4d. Cancelar tarefa
+    cancelar_match = re.search(
+        r"(cancelei|cancela|desist[ei])\b.*?(?:tarefa\s*)?#?(\d+)",
+        msg_lower,
+    )
+    if cancelar_match:
+        task_id = int(cancelar_match.group(2))
+        result = {"handler": "deterministic", "func": "cancelar_tarefa", "args": {"id": task_id}}
+        logger.info("MSG=%s → handler=%s func=%s id=%d", msg[:80], result["handler"], result.get("func"), task_id)
+        return result
+
     # 5. Criar tarefa simples (agora funciona com ou sem projeto)
     parsed = _parse_criar_tarefa(msg)
     if parsed:

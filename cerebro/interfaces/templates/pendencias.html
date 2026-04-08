@@ -53,7 +53,10 @@
     </select>
     <select name="status" data-autosubmit>
         <option value="pendente" {% if status_filtro == 'pendente' %}selected{% endif %}>Pendentes</option>
+        <option value="em_andamento" {% if status_filtro == 'em_andamento' %}selected{% endif %}>Em andamento</option>
+        <option value="bloqueada" {% if status_filtro == 'bloqueada' %}selected{% endif %}>Bloqueadas</option>
         <option value="concluida" {% if status_filtro == 'concluida' %}selected{% endif %}>Concluídas</option>
+        <option value="cancelada" {% if status_filtro == 'cancelada' %}selected{% endif %}>Canceladas</option>
         <option value="" {% if not status_filtro %}selected{% endif %}>Todas</option>
     </select>
 </form>
@@ -73,11 +76,15 @@
     </thead>
     <tbody>
         {% for p in pendencias %}
-        <tr>
+        <!-- Display row -->
+        <tr id="row-{{ p.id }}">
             <td>{{ p.id }}</td>
-            <td>{{ p.tarefa }}</td>
+            <td>
+                {{ p.tarefa }}
+                {% if p.notas %}<br><small style="color: var(--pico-muted-color);">{{ p.notas[:80] }}{% if p.notas|length > 80 %}...{% endif %}</small>{% endif %}
+            </td>
             <td>{{ p.projeto | upper }}</td>
-            <td>P{{ p.prioridade }}</td>
+            <td><span class="badge badge-p{{ p.prioridade }}">P{{ p.prioridade }}</span></td>
             <td>
                 {% if p.prazo %}
                     {% if p.atrasada %}<span class="atrasada">{{ p.prazo }}</span>{% else %}{{ p.prazo }}{% endif %}
@@ -87,9 +94,46 @@
             <td><span class="badge badge-{{ p.status }}">{{ p.status }}</span></td>
             <td>
                 {% if p.status == 'pendente' %}
-                <button class="btn-concluir" data-concluir="{{ p.id }}">✓ Concluir</button>
+                <button class="btn-concluir" data-iniciar="{{ p.id }}" title="Iniciar">▶</button>
+                <button class="btn-concluir" data-concluir="{{ p.id }}" title="Concluir">✓</button>
+                {% elif p.status == 'em_andamento' %}
+                <button class="btn-concluir" data-concluir="{{ p.id }}" title="Concluir">✓</button>
+                <button class="btn-excluir" data-bloquear="{{ p.id }}" title="Bloquear">⏸</button>
+                {% elif p.status == 'bloqueada' %}
+                <button class="btn-concluir" data-iniciar="{{ p.id }}" title="Retomar">▶</button>
                 {% endif %}
-                <button class="btn-excluir" data-excluir-pendencia="{{ p.id }}">✕</button>
+                {% if p.status not in ('concluida', 'cancelada') %}
+                <button class="btn-concluir" data-editar-pendencia="{{ p.id }}" title="Editar" style="background:#3498db;">✎</button>
+                <button class="btn-excluir" data-cancelar-pendencia="{{ p.id }}" title="Cancelar">✕</button>
+                {% endif %}
+            </td>
+        </tr>
+        <!-- Edit row (hidden by default) -->
+        <tr id="edit-{{ p.id }}" style="display:none; background: var(--pico-card-background-color);">
+            <td>{{ p.id }}</td>
+            <td><input type="text" data-field="tarefa" value="{{ p.tarefa }}" style="margin:0;"></td>
+            <td>
+                <select data-field="projeto" style="margin:0;">
+                    {% for slug, info in projetos.items() %}
+                    <option value="{{ slug }}" {% if p.projeto == slug %}selected{% endif %}>{{ slug | upper }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td>
+                <select data-field="prioridade" style="margin:0;">
+                    {% for i in range(1, 6) %}
+                    <option value="{{ i }}" {% if p.prioridade == i %}selected{% endif %}>P{{ i }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td><input type="date" data-field="prazo" value="{{ p.prazo or '' }}" style="margin:0;"></td>
+            <td><input type="text" data-field="delegado_para" value="{{ p.delegado_para or '' }}" placeholder="Delegar para..." style="margin:0;"></td>
+            <td colspan="2">
+                <input type="text" data-field="notas" value="{{ p.notas or '' }}" placeholder="Notas..." style="margin:0 0 4px 0;">
+                <div>
+                    <button class="btn-concluir" data-salvar-pendencia="{{ p.id }}">Salvar</button>
+                    <button class="btn-excluir" data-cancelar-edicao="{{ p.id }}">Cancelar</button>
+                </div>
             </td>
         </tr>
         {% endfor %}
@@ -98,4 +142,18 @@
         {% endif %}
     </tbody>
 </table>
+
+{% if total_pages > 1 %}
+<nav>
+    <ul>
+        {% if page > 1 %}
+        <li><a href="?page={{ page - 1 }}{% if projeto_filtro %}&projeto={{ projeto_filtro }}{% endif %}&status={{ status_filtro }}">← Anterior</a></li>
+        {% endif %}
+        <li>Página {{ page }} de {{ total_pages }} ({{ total }} pendências)</li>
+        {% if page < total_pages %}
+        <li><a href="?page={{ page + 1 }}{% if projeto_filtro %}&projeto={{ projeto_filtro }}{% endif %}&status={{ status_filtro }}">Próxima →</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
 {% endblock %}

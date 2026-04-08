@@ -61,6 +61,37 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    // ── Iniciar tarefa ──────────────────────────────────────
+    document.querySelectorAll('[data-iniciar]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.getAttribute('data-iniciar');
+            apiCall('/api/pendencias/' + id + '/iniciar', { method: 'PUT' })
+                .then(function () { location.reload(); })
+                .catch(function (err) { alert('Erro ao iniciar: ' + err.message); });
+        });
+    });
+
+    // ── Bloquear tarefa ────────────────────────────────────
+    document.querySelectorAll('[data-bloquear]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.getAttribute('data-bloquear');
+            apiCall('/api/pendencias/' + id + '/bloquear', { method: 'PUT' })
+                .then(function () { location.reload(); })
+                .catch(function (err) { alert('Erro ao bloquear: ' + err.message); });
+        });
+    });
+
+    // ── Cancelar tarefa ────────────────────────────────────
+    document.querySelectorAll('[data-cancelar-pendencia]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.getAttribute('data-cancelar-pendencia');
+            if (!confirm('Cancelar tarefa #' + id + '?')) return;
+            apiCall('/api/pendencias/' + id + '/cancelar', { method: 'PUT' })
+                .then(function () { location.reload(); })
+                .catch(function (err) { alert('Erro ao cancelar: ' + err.message); });
+        });
+    });
+
     // ── Excluir tarefa ──────────────────────────────────────
     document.querySelectorAll('[data-excluir-pendencia]').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -69,6 +100,45 @@ document.addEventListener('DOMContentLoaded', function () {
             apiCall('/api/pendencias/' + id, { method: 'DELETE' })
                 .then(function () { location.reload(); })
                 .catch(function (err) { alert('Erro ao excluir: ' + err.message); });
+        });
+    });
+
+    // ── Editar pendência (toggle edit row) ─────────────────
+    document.querySelectorAll('[data-editar-pendencia]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.getAttribute('data-editar-pendencia');
+            document.getElementById('row-' + id).style.display = 'none';
+            document.getElementById('edit-' + id).style.display = '';
+        });
+    });
+
+    // ── Cancelar edição pendência ──────────────────────────
+    document.querySelectorAll('[data-cancelar-edicao]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.getAttribute('data-cancelar-edicao');
+            document.getElementById('row-' + id).style.display = '';
+            document.getElementById('edit-' + id).style.display = 'none';
+        });
+    });
+
+    // ── Salvar pendência (PUT) ─────────────────────────────
+    document.querySelectorAll('[data-salvar-pendencia]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.getAttribute('data-salvar-pendencia');
+            var editRow = document.getElementById('edit-' + id);
+            var campos = {};
+            editRow.querySelectorAll('[data-field]').forEach(function (input) {
+                var field = input.getAttribute('data-field');
+                var val = input.value;
+                if (field === 'prioridade') val = parseInt(val) || 3;
+                if (val !== '') campos[field] = val;
+            });
+            apiCall('/api/pendencias/' + id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(campos)
+            }).then(function () { location.reload(); })
+              .catch(function (err) { alert('Erro ao salvar: ' + err.message); });
         });
     });
 

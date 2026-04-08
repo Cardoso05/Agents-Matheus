@@ -276,3 +276,43 @@ class TestDetectarProjeto:
 
     def test_nenhum(self):
         assert detectar_projeto("o que faço agora?") is None
+
+
+class TestNovosStatus:
+    """Testes para classificação de iniciar/bloquear/cancelar tarefa."""
+
+    def test_comecei_a_3(self):
+        r = classificar("comecei a #3")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "iniciar_tarefa"
+        assert r["args"]["id"] == 3
+
+    def test_to_fazendo_5(self):
+        r = classificar("to fazendo a 5")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "iniciar_tarefa"
+        assert r["args"]["id"] == 5
+
+    def test_travei_na_5(self):
+        r = classificar("travei na #5")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "bloquear_tarefa"
+        assert r["args"]["id"] == 5
+
+    def test_bloqueei_a_2(self):
+        r = classificar("bloqueei a 2")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "bloquear_tarefa"
+        assert r["args"]["id"] == 2
+
+    def test_cancelei_a_7(self):
+        r = classificar("cancelei a #7")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "cancelar_tarefa"
+        assert r["args"]["id"] == 7
+
+    def test_cancela_a_4(self):
+        r = classificar("cancela a 4")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "cancelar_tarefa"
+        assert r["args"]["id"] == 4

@@ -178,6 +178,103 @@ class TestDeletarPendencia:
         assert result is False
 
 
+class TestIniciarTarefa:
+
+    def test_inicia_existente(self, conn):
+        result = deterministic.iniciar_tarefa(1, conn=conn)
+        assert "🔵" in result
+        assert "iniciada" in result
+
+    def test_tarefa_inexistente(self, conn):
+        result = deterministic.iniciar_tarefa(999, conn=conn)
+        assert "❌" in result
+
+
+class TestBloquearTarefa:
+
+    def test_bloqueia_existente(self, conn):
+        result = deterministic.bloquear_tarefa(2, conn=conn)
+        assert "🔴" in result
+        assert "bloqueada" in result
+
+    def test_com_motivo(self, conn):
+        result = deterministic.bloquear_tarefa(2, motivo="Aguardando resposta", conn=conn)
+        assert "Aguardando resposta" in result
+
+    def test_tarefa_inexistente(self, conn):
+        result = deterministic.bloquear_tarefa(999, conn=conn)
+        assert "❌" in result
+
+
+class TestCancelarTarefa:
+
+    def test_cancela_existente(self, conn):
+        result = deterministic.cancelar_tarefa(3, conn=conn)
+        assert "🚫" in result
+        assert "cancelada" in result
+
+    def test_tarefa_inexistente(self, conn):
+        result = deterministic.cancelar_tarefa(999, conn=conn)
+        assert "❌" in result
+
+
+class TestValidacao:
+
+    def test_prioridade_invalida_criar(self, conn):
+        with pytest.raises(ValueError, match="Prioridade inválida"):
+            models.criar_pendencia("teste", "wipr", prioridade=0, conn=conn)
+
+    def test_prioridade_invalida_alta(self, conn):
+        with pytest.raises(ValueError, match="Prioridade inválida"):
+            models.criar_pendencia("teste", "wipr", prioridade=6, conn=conn)
+
+    def test_status_invalido_atualizar(self, conn):
+        with pytest.raises(ValueError, match="Status inválido"):
+            models.atualizar_pendencia(1, status="foo", conn=conn)
+
+    def test_status_valido_atualizar(self, conn):
+        result = models.atualizar_pendencia(1, status="em_andamento", conn=conn)
+        assert result["status"] == "em_andamento"
+
+
+class TestPaginacao:
+
+    def test_com_limite(self, conn):
+        result = models.listar_pendencias(limite=2, conn=conn)
+        assert len(result) == 2
+
+    def test_com_offset(self, conn):
+        all_items = models.listar_pendencias(conn=conn)
+        page2 = models.listar_pendencias(limite=2, offset=2, conn=conn)
+        assert len(page2) <= 2
+        if len(all_items) > 2:
+            assert page2[0]["id"] != all_items[0]["id"]
+
+    def test_sem_limite_retorna_tudo(self, conn):
+        result = models.listar_pendencias(conn=conn)
+        assert len(result) >= 7  # seed cria 7 pendências pendentes
+
+    def test_contar_pendencias(self, conn):
+        total = models.contar_pendencias(conn=conn)
+        all_items = models.listar_pendencias(conn=conn)
+        assert total == len(all_items)
+
+
+class TestOrdenacaoNulos:
+
+    def test_nulo_vai_ao_final_dentro_da_prioridade(self, conn):
+        # Criar tarefa P1 sem prazo (seed já tem P1 com prazo=yesterday)
+        models.criar_pendencia("sem prazo p1", "wipr", prioridade=1, conn=conn)
+        result = models.listar_pendencias(projeto="wipr", status="pendente", conn=conn)
+        # Dentro da mesma prioridade, nulo deve vir depois
+        p1_items = [p for p in result if p["prioridade"] == 1]
+        assert len(p1_items) >= 2
+        # O último P1 deve ser o sem prazo
+        assert p1_items[-1]["prazo"] is None
+        # O primeiro P1 deve ter prazo
+        assert p1_items[0]["prazo"] is not None
+
+
 class TestResumoSemanal:
 
     def test_retorna_metricas(self, conn):

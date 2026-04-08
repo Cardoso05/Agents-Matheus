@@ -114,7 +114,7 @@ TOOLS = [
                 "projeto": {"type": "string", "description": "Novo projeto"},
                 "prioridade": {"type": "integer", "description": "Nova prioridade (1-5)"},
                 "prazo": {"type": "string", "description": "Novo prazo (YYYY-MM-DD)"},
-                "status": {"type": "string", "description": "Novo status (pendente, concluida, cancelada)"},
+                "status": {"type": "string", "description": "Novo status (pendente, em_andamento, bloqueada, concluida, cancelada)"},
                 "responsavel": {"type": "string", "description": "Novo responsável"},
                 "delegado_para": {"type": "string", "description": "Delegar para alguém"},
                 "notas": {"type": "string", "description": "Novas notas"},
@@ -129,7 +129,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "projeto": {"type": "string", "description": "Filtrar por projeto"},
-                "status": {"type": "string", "description": "Filtrar por status (pendente, concluida, cancelada)"},
+                "status": {"type": "string", "description": "Filtrar por status (pendente, em_andamento, bloqueada, concluida, cancelada)"},
                 "responsavel": {"type": "string", "description": "Filtrar por responsável"},
             },
             "required": [],

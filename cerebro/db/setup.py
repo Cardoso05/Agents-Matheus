@@ -36,6 +36,22 @@ def init_db(conn: sqlite3.Connection | None = None) -> None:
     conn.executescript(SCHEMA)
     conn.commit()
 
+    # Migrations seguras para bancos existentes
+    _run_migrations(conn)
+
+
+def _run_migrations(conn: sqlite3.Connection) -> None:
+    """Migrations aditivas — safe para rodar múltiplas vezes."""
+    migrations = [
+        "ALTER TABLE stakeholders ADD COLUMN telegram_id TEXT",
+    ]
+    for sql in migrations:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Coluna já existe
+
 
 SCHEMA = """
 -- Pendências (tarefas)
@@ -43,9 +59,9 @@ CREATE TABLE IF NOT EXISTS pendencias (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     tarefa          TEXT NOT NULL,
     projeto         TEXT NOT NULL,
-    prioridade      INTEGER DEFAULT 3,
+    prioridade      INTEGER DEFAULT 3 CHECK(prioridade BETWEEN 1 AND 5),
     prazo           DATE,
-    status          TEXT DEFAULT 'pendente',
+    status          TEXT DEFAULT 'pendente' CHECK(status IN ('pendente','em_andamento','bloqueada','concluida','cancelada')),
     responsavel     TEXT DEFAULT 'matheus',
     delegado_para   TEXT,
     notas           TEXT,
@@ -83,6 +99,7 @@ CREATE TABLE IF NOT EXISTS stakeholders (
     papel           TEXT NOT NULL,
     contato         TEXT,
     notas           TEXT,
+    telegram_id     TEXT,
     ativo           BOOLEAN DEFAULT 1
 );
 

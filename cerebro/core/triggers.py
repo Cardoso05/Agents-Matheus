@@ -28,7 +28,7 @@ def _avaliar_tarefas_sem_prazo(conn) -> list[dict] | None:
     rows = conn.execute(
         """SELECT projeto, COUNT(*) AS sem_prazo
            FROM pendencias
-           WHERE status = 'pendente' AND prazo IS NULL
+           WHERE status IN ('pendente', 'em_andamento') AND prazo IS NULL
            GROUP BY projeto
            HAVING sem_prazo >= 3"""
     ).fetchall()
@@ -71,7 +71,7 @@ def _avaliar_projeto_sobrecarregado(conn) -> list[dict] | None:
         """SELECT projeto, COUNT(*) AS total,
                   SUM(CASE WHEN prazo < date('now') THEN 1 ELSE 0 END) AS atrasadas
            FROM pendencias
-           WHERE status = 'pendente'
+           WHERE status IN ('pendente', 'em_andamento', 'bloqueada')
            GROUP BY projeto
            HAVING total >= 15"""
     ).fetchall()
@@ -96,7 +96,7 @@ def _avaliar_p1p2_paradas(conn) -> list[dict] | None:
         """SELECT id, tarefa, projeto, prioridade,
                   CAST(julianday('now') - julianday(atualizado_em) AS INTEGER) AS dias
            FROM pendencias
-           WHERE status = 'pendente'
+           WHERE status IN ('pendente', 'em_andamento')
              AND prioridade <= 2
              AND julianday('now') - julianday(atualizado_em) > 3
            ORDER BY prioridade, dias DESC"""
@@ -149,7 +149,7 @@ def _avaliar_decisao_pendente(conn) -> list[dict] | None:
         """SELECT id, tarefa, projeto,
                   CAST(julianday('now') - julianday(criado_em) AS INTEGER) AS dias
            FROM pendencias
-           WHERE status = 'pendente'
+           WHERE status IN ('pendente', 'em_andamento')
              AND (LOWER(tarefa) LIKE '%definir%' OR LOWER(tarefa) LIKE '%decidir%'
                   OR LOWER(tarefa) LIKE '%escolher%')
              AND julianday('now') - julianday(criado_em) > 10
@@ -330,7 +330,7 @@ def _avaliar_matheus_sumiu(conn) -> list[dict] | None:
     if row["horas"] < 24:
         return None
     atrasadas = conn.execute(
-        "SELECT COUNT(*) AS n FROM pendencias WHERE status = 'pendente' AND prazo < date('now')"
+        "SELECT COUNT(*) AS n FROM pendencias WHERE status IN ('pendente', 'em_andamento') AND prazo < date('now')"
     ).fetchone()
     return [{"horas": row["horas"], "atrasadas": atrasadas["n"] if atrasadas else 0}]
 
@@ -348,7 +348,7 @@ def _formatar_matheus_sumiu(dados: list[dict]) -> str:
 def _avaliar_semana_sem_concluir(conn) -> list[dict] | None:
     row = conn.execute(
         """SELECT CAST(julianday('now') - julianday(MAX(concluido_em)) AS INTEGER) AS dias,
-                  (SELECT COUNT(*) FROM pendencias WHERE status = 'pendente') AS pendentes
+                  (SELECT COUNT(*) FROM pendencias WHERE status IN ('pendente', 'em_andamento', 'bloqueada')) AS pendentes
            FROM pendencias
            WHERE status = 'concluida' AND concluido_em IS NOT NULL
            HAVING dias >= 5"""

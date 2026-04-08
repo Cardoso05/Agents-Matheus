@@ -5,6 +5,11 @@ from datetime import datetime, timedelta
 from cerebro.core.config import PROJETOS, PRIORIDADE_PROJETO_ORDER
 from cerebro.db.setup import get_connection
 
+# Status considerados "ativos" (não concluídos/cancelados)
+ACTIVE_STATUSES = ('pendente', 'em_andamento', 'bloqueada')
+# Status que aparecem no top do dia (acionáveis)
+ACTIONABLE_STATUSES = ('pendente', 'em_andamento')
+
 
 def status_geral(conn=None) -> str:
     """Conta pendências por projeto, destaca atrasadas e urgentes."""
@@ -13,15 +18,17 @@ def status_geral(conn=None) -> str:
         """SELECT projeto,
                   COUNT(*) as total,
                   SUM(CASE WHEN prazo < date('now') THEN 1 ELSE 0 END) as atrasadas,
-                  SUM(CASE WHEN prioridade <= 2 THEN 1 ELSE 0 END) as urgentes
+                  SUM(CASE WHEN prioridade <= 2 THEN 1 ELSE 0 END) as urgentes,
+                  SUM(CASE WHEN status = 'em_andamento' THEN 1 ELSE 0 END) as em_andamento,
+                  SUM(CASE WHEN status = 'bloqueada' THEN 1 ELSE 0 END) as bloqueadas
            FROM pendencias
-           WHERE status = 'pendente'
+           WHERE status IN ('pendente', 'em_andamento', 'bloqueada')
            GROUP BY projeto
            ORDER BY projeto"""
     ).fetchall()
 
     if not rows:
-        return "Nenhuma pendência pendente. Tudo limpo!"
+        return "Nenhuma pendência ativa. Tudo limpo!"
 
     lines = ["📊 **Status Geral**\n"]
     total_geral = 0
@@ -36,11 +43,18 @@ def status_geral(conn=None) -> str:
         total_geral += row["total"]
         total_atrasadas += atrasadas
 
+        em_andamento = row["em_andamento"] or 0
+        bloqueadas = row["bloqueadas"] or 0
+
         line = f"{emoji} **{nome}**: {row['total']} pendências"
         if atrasadas > 0:
             line += f" (🚨 {atrasadas} atrasada{'s' if atrasadas > 1 else ''})"
         if urgentes > 0:
             line += f" ({urgentes} urgente{'s' if urgentes > 1 else ''})"
+        if em_andamento > 0:
+            line += f" (🔵 {em_andamento} em andamento)"
+        if bloqueadas > 0:
+            line += f" (🔴 {bloqueadas} bloqueada{'s' if bloqueadas > 1 else ''})"
         lines.append(line)
 
     lines.append(f"\n**Total:** {total_geral} pendências")
@@ -57,12 +71,12 @@ def top_n_do_dia(n: int = 3, conn=None) -> str:
     # Busca todas pendentes, ordena por prioridade + prazo + prioridade do projeto
     rows = conn.execute(
         """SELECT * FROM pendencias
-           WHERE status = 'pendente'
-           ORDER BY prioridade ASC, prazo ASC NULLS LAST"""
+           WHERE status IN ('pendente', 'em_andamento')
+           ORDER BY prioridade ASC, prazo IS NULL, prazo ASC"""
     ).fetchall()
 
     if not rows:
-        return "Nenhuma pendência pendente. Dia livre!"
+        return "Nenhuma pendência ativa. Dia livre!"
 
     # Re-sort incluindo prioridade do projeto
     def sort_key(row):
@@ -91,7 +105,7 @@ def atrasadas(conn=None) -> str:
     conn = conn or get_connection()
     rows = conn.execute(
         """SELECT * FROM pendencias
-           WHERE prazo < date('now') AND status = 'pendente'
+           WHERE prazo < date('now') AND status IN ('pendente', 'em_andamento')
            ORDER BY prazo ASC, prioridade ASC"""
     ).fetchall()
 
@@ -138,7 +152,7 @@ def projetos_parados(dias: int = 5, conn=None) -> str:
     conn = conn or get_connection()
     # Projetos com pendências ativas
     projetos_ativos = conn.execute(
-        "SELECT DISTINCT projeto FROM pendencias WHERE status = 'pendente'"
+        "SELECT DISTINCT projeto FROM pendencias WHERE status IN ('pendente', 'em_andamento', 'bloqueada')"
     ).fetchall()
 
     if not projetos_ativos:
@@ -178,8 +192,8 @@ def pendencias_projeto(projeto: str, conn=None) -> str:
     conn = conn or get_connection()
     rows = conn.execute(
         """SELECT * FROM pendencias
-           WHERE projeto = ? AND status = 'pendente'
-           ORDER BY prioridade ASC, prazo ASC NULLS LAST""",
+           WHERE projeto = ? AND status IN ('pendente', 'em_andamento', 'bloqueada')
+           ORDER BY prioridade ASC, prazo IS NULL, prazo ASC""",
         (projeto,),
     ).fetchall()
 
@@ -188,17 +202,20 @@ def pendencias_projeto(projeto: str, conn=None) -> str:
     emoji = info.get("emoji", "⚪")
 
     if not rows:
-        return f"{emoji} **{nome}**: Nenhuma pendência pendente."
+        return f"{emoji} **{nome}**: Nenhuma pendência ativa."
 
     today = datetime.now().date().isoformat()
     lines = [f"{emoji} **{nome}** — {len(rows)} pendência{'s' if len(rows) > 1 else ''}\n"]
 
+    status_badge = {"pendente": "", "em_andamento": "🔵", "bloqueada": "🔴"}
     for row in rows:
         atrasada = "🚨 " if row["prazo"] and row["prazo"] < today else ""
         prazo_str = f" (prazo: {row['prazo']})" if row["prazo"] else ""
         delegado = f" → {row['delegado_para']}" if row["delegado_para"] else ""
         prio = "!" * (4 - min(row["prioridade"], 3))  # !!! = urgente, vazio = baixa
-        lines.append(f"{atrasada}#{row['id']} {prio} {row['tarefa']}{prazo_str}{delegado}")
+        badge = status_badge.get(row["status"], "")
+        badge_str = f" {badge}" if badge else ""
+        lines.append(f"{atrasada}#{row['id']} {prio} {row['tarefa']}{badge_str}{prazo_str}{delegado}")
 
     return "\n".join(lines)
 
@@ -253,6 +270,74 @@ def concluir_tarefa(id: int, conn=None) -> str:
     return result
 
 
+def iniciar_tarefa(id: int, conn=None) -> str:
+    """Marca tarefa como em andamento."""
+    from cerebro.db.models import iniciar_pendencia
+
+    p = iniciar_pendencia(id, conn=conn)
+    if not p:
+        return f"❌ Tarefa #{id} não encontrada."
+
+    info = PROJETOS.get(p["projeto"], {})
+    nome = info.get("nome", p["projeto"].upper())
+    return f"🔵 Tarefa #{id} iniciada: {p['tarefa']} [{nome}]"
+
+
+def bloquear_tarefa(id: int, motivo: str | None = None, conn=None) -> str:
+    """Marca tarefa como bloqueada."""
+    from cerebro.db.models import bloquear_pendencia
+
+    p = bloquear_pendencia(id, motivo=motivo, conn=conn)
+    if not p:
+        return f"❌ Tarefa #{id} não encontrada."
+
+    info = PROJETOS.get(p["projeto"], {})
+    nome = info.get("nome", p["projeto"].upper())
+    motivo_str = f"\nMotivo: {motivo}" if motivo else ""
+    return f"🔴 Tarefa #{id} bloqueada: {p['tarefa']} [{nome}]{motivo_str}"
+
+
+def cancelar_tarefa(id: int, conn=None) -> str:
+    """Marca tarefa como cancelada."""
+    from cerebro.db.models import cancelar_pendencia
+
+    p = cancelar_pendencia(id, conn=conn)
+    if not p:
+        return f"❌ Tarefa #{id} não encontrada."
+
+    info = PROJETOS.get(p["projeto"], {})
+    nome = info.get("nome", p["projeto"].upper())
+    return f"🚫 Tarefa #{id} cancelada: {p['tarefa']} [{nome}]"
+
+
+def delegar_tarefa_det(id: int, pessoa: str, conn=None) -> str:
+    """Delega tarefa e busca contato do stakeholder."""
+    from cerebro.db.models import delegar_tarefa, listar_stakeholders
+
+    p = delegar_tarefa(id, pessoa, conn=conn)
+    if not p:
+        return f"❌ Tarefa #{id} não encontrada."
+
+    info = PROJETOS.get(p["projeto"], {})
+    nome = info.get("nome", p["projeto"].upper())
+    result = f"📋 Tarefa #{id} delegada para {pessoa}: {p['tarefa']} [{nome}]"
+
+    # Buscar contato do stakeholder
+    try:
+        stakeholders = listar_stakeholders(p["projeto"], conn=conn)
+        for s in stakeholders:
+            if s["nome"].lower() == pessoa.lower():
+                contato = s.get("contato") or s.get("telegram_id")
+                if contato:
+                    result += f"\nContato: {contato}"
+                break
+    except Exception:
+        pass
+
+    result += f"\n💡 Lembre de notificar {pessoa} sobre a delegação."
+    return result
+
+
 def eventos_semana(conn=None) -> str:
     """Lista eventos da semana atual formatados."""
     from cerebro.integrations.calendar import eventos_da_semana, formatar_eventos
@@ -276,11 +361,11 @@ def resumo_semanal(conn=None) -> str:
     ).fetchone()["n"]
 
     pendentes_total = conn.execute(
-        "SELECT COUNT(*) as n FROM pendencias WHERE status = 'pendente'"
+        "SELECT COUNT(*) as n FROM pendencias WHERE status IN ('pendente', 'em_andamento', 'bloqueada')"
     ).fetchone()["n"]
 
     atrasadas_total = conn.execute(
-        "SELECT COUNT(*) as n FROM pendencias WHERE status = 'pendente' AND prazo < date('now')"
+        "SELECT COUNT(*) as n FROM pendencias WHERE status IN ('pendente', 'em_andamento') AND prazo < date('now')"
     ).fetchone()["n"]
 
     # Projetos mais ativos (por ações no histórico)
