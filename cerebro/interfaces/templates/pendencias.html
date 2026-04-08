@@ -76,8 +76,7 @@
     </thead>
     <tbody>
         {% for p in pendencias %}
-        <!-- Display row -->
-        <tr id="row-{{ p.id }}">
+        <tr>
             <td>{{ p.id }}</td>
             <td>
                 {{ p.tarefa }}
@@ -103,37 +102,9 @@
                 <button class="btn-concluir" data-iniciar="{{ p.id }}" title="Retomar">▶</button>
                 {% endif %}
                 {% if p.status not in ('concluida', 'cancelada') %}
-                <button class="btn-concluir" data-editar-pendencia="{{ p.id }}" title="Editar" style="background:#3498db;">✎</button>
+                <button class="btn-concluir" data-abrir-modal="{{ p.id }}" title="Editar" style="background:#3498db;">✎</button>
                 <button class="btn-excluir" data-cancelar-pendencia="{{ p.id }}" title="Cancelar">✕</button>
                 {% endif %}
-            </td>
-        </tr>
-        <!-- Edit row (hidden by default) -->
-        <tr id="edit-{{ p.id }}" style="display:none; background: var(--pico-card-background-color);">
-            <td>{{ p.id }}</td>
-            <td><input type="text" data-field="tarefa" value="{{ p.tarefa }}" style="margin:0;"></td>
-            <td>
-                <select data-field="projeto" style="margin:0;">
-                    {% for slug, info in projetos.items() %}
-                    <option value="{{ slug }}" {% if p.projeto == slug %}selected{% endif %}>{{ slug | upper }}</option>
-                    {% endfor %}
-                </select>
-            </td>
-            <td>
-                <select data-field="prioridade" style="margin:0;">
-                    {% for i in range(1, 6) %}
-                    <option value="{{ i }}" {% if p.prioridade == i %}selected{% endif %}>P{{ i }}</option>
-                    {% endfor %}
-                </select>
-            </td>
-            <td><input type="date" data-field="prazo" value="{{ p.prazo or '' }}" style="margin:0;"></td>
-            <td><input type="text" data-field="delegado_para" value="{{ p.delegado_para or '' }}" placeholder="Delegar para..." style="margin:0;"></td>
-            <td colspan="2">
-                <input type="text" data-field="notas" value="{{ p.notas or '' }}" placeholder="Notas..." style="margin:0 0 4px 0;">
-                <div>
-                    <button class="btn-concluir" data-salvar-pendencia="{{ p.id }}">Salvar</button>
-                    <button class="btn-excluir" data-cancelar-edicao="{{ p.id }}">Cancelar</button>
-                </div>
             </td>
         </tr>
         {% endfor %}
@@ -156,4 +127,61 @@
     </ul>
 </nav>
 {% endif %}
+
+<!-- Modal de edição -->
+<dialog id="modal-editar" class="modal-edit">
+    <div class="modal-header">
+        <h3>Editar Pendência <span id="modal-edit-id"></span></h3>
+        <button class="btn-close" id="modal-fechar">×</button>
+    </div>
+    <div class="modal-body">
+        <input type="hidden" id="modal-pendencia-id">
+        <label for="modal-tarefa">Tarefa</label>
+        <input type="text" id="modal-tarefa">
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div>
+                <label for="modal-projeto">Projeto</label>
+                <select id="modal-projeto">
+                    {% for slug, info in projetos.items() %}
+                    <option value="{{ slug }}">{{ info.emoji }} {{ info.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="modal-prioridade">Prioridade</label>
+                <select id="modal-prioridade">
+                    <option value="1">P1 - Urgente</option>
+                    <option value="2">P2 - Alta</option>
+                    <option value="3">P3 - Normal</option>
+                    <option value="4">P4 - Baixa</option>
+                    <option value="5">P5 - Eventual</option>
+                </select>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div>
+                <label for="modal-prazo">Prazo</label>
+                <input type="date" id="modal-prazo">
+            </div>
+            <div>
+                <label for="modal-delegado">Delegar para</label>
+                <input type="text" id="modal-delegado" placeholder="Nome da pessoa...">
+            </div>
+        </div>
+
+        <label for="modal-notas">Notas</label>
+        <textarea id="modal-notas" placeholder="Observações, contexto, motivo de bloqueio..."></textarea>
+    </div>
+    <div class="modal-footer">
+        <button class="btn-excluir" id="modal-cancelar">Cancelar</button>
+        <button class="btn-concluir" id="modal-salvar">Salvar</button>
+    </div>
+</dialog>
+
+<!-- Dados das pendências para o modal -->
+<script type="application/json" id="pendencias-data">
+[{% for p in pendencias %}{"id":{{ p.id }},"tarefa":"{{ p.tarefa | e }}","projeto":"{{ p.projeto }}","prioridade":{{ p.prioridade }},"prazo":"{{ p.prazo or '' }}","delegado_para":"{{ p.delegado_para or '' }}","notas":"{{ (p.notas or '') | e }}"}{% if not loop.last %},{% endif %}{% endfor %}]
+</script>
 {% endblock %}

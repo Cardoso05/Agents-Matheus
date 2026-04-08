@@ -55,6 +55,18 @@
         @media (max-width: 480px) {
             .grid-cards { grid-template-columns: 1fr; }
         }
+        /* Modal de edição */
+        dialog.modal-edit { border: none; border-radius: 12px; padding: 0; max-width: 540px; width: 90%; box-shadow: 0 8px 30px rgba(0,0,0,0.2); }
+        dialog.modal-edit::backdrop { background: rgba(0,0,0,0.5); }
+        dialog.modal-edit .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--pico-muted-border-color); }
+        dialog.modal-edit .modal-header h3 { margin: 0; font-size: 1.1rem; }
+        dialog.modal-edit .modal-body { padding: 1.5rem; }
+        dialog.modal-edit .modal-body label { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem; display: block; }
+        dialog.modal-edit .modal-body input, dialog.modal-edit .modal-body select, dialog.modal-edit .modal-body textarea { margin-bottom: 1rem; }
+        dialog.modal-edit .modal-body textarea { min-height: 80px; resize: vertical; }
+        dialog.modal-edit .modal-footer { display: flex; justify-content: flex-end; gap: 0.5rem; padding: 1rem 1.5rem; border-top: 1px solid var(--pico-muted-border-color); }
+        dialog.modal-edit .btn-close { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--pico-muted-color); padding: 0; line-height: 1; }
+        dialog.modal-edit .btn-close:hover { color: var(--pico-color); }
     </style>
 </head>
 <body>

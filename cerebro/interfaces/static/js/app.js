@@ -103,36 +103,57 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // ── Editar pendência (toggle edit row) ─────────────────
-    document.querySelectorAll('[data-editar-pendencia]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var id = this.getAttribute('data-editar-pendencia');
-            document.getElementById('row-' + id).style.display = 'none';
-            document.getElementById('edit-' + id).style.display = '';
-        });
-    });
+    // ── Modal de edição de pendência ──────────────────────────
+    var modal = document.getElementById('modal-editar');
+    if (modal) {
+        var pendenciasData = [];
+        try {
+            var dataEl = document.getElementById('pendencias-data');
+            if (dataEl) pendenciasData = JSON.parse(dataEl.textContent);
+        } catch (e) { /* ignore */ }
 
-    // ── Cancelar edição pendência ──────────────────────────
-    document.querySelectorAll('[data-cancelar-edicao]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var id = this.getAttribute('data-cancelar-edicao');
-            document.getElementById('row-' + id).style.display = '';
-            document.getElementById('edit-' + id).style.display = 'none';
-        });
-    });
+        // Abrir modal
+        document.querySelectorAll('[data-abrir-modal]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var id = parseInt(this.getAttribute('data-abrir-modal'));
+                var p = pendenciasData.find(function (item) { return item.id === id; });
+                if (!p) return;
 
-    // ── Salvar pendência (PUT) ─────────────────────────────
-    document.querySelectorAll('[data-salvar-pendencia]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var id = this.getAttribute('data-salvar-pendencia');
-            var editRow = document.getElementById('edit-' + id);
-            var campos = {};
-            editRow.querySelectorAll('[data-field]').forEach(function (input) {
-                var field = input.getAttribute('data-field');
-                var val = input.value;
-                if (field === 'prioridade') val = parseInt(val) || 3;
-                if (val !== '') campos[field] = val;
+                document.getElementById('modal-pendencia-id').value = p.id;
+                document.getElementById('modal-edit-id').textContent = '#' + p.id;
+                document.getElementById('modal-tarefa').value = p.tarefa;
+                document.getElementById('modal-projeto').value = p.projeto;
+                document.getElementById('modal-prioridade').value = p.prioridade;
+                document.getElementById('modal-prazo').value = p.prazo;
+                document.getElementById('modal-delegado').value = p.delegado_para;
+                document.getElementById('modal-notas').value = p.notas;
+
+                modal.showModal();
             });
+        });
+
+        // Fechar modal
+        document.getElementById('modal-fechar').addEventListener('click', function () { modal.close(); });
+        document.getElementById('modal-cancelar').addEventListener('click', function () { modal.close(); });
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) modal.close();
+        });
+
+        // Salvar via modal
+        document.getElementById('modal-salvar').addEventListener('click', function () {
+            var id = document.getElementById('modal-pendencia-id').value;
+            var campos = {
+                tarefa: document.getElementById('modal-tarefa').value,
+                projeto: document.getElementById('modal-projeto').value,
+                prioridade: parseInt(document.getElementById('modal-prioridade').value) || 3,
+            };
+            var prazo = document.getElementById('modal-prazo').value;
+            if (prazo) campos.prazo = prazo;
+            var delegado = document.getElementById('modal-delegado').value;
+            if (delegado) campos.delegado_para = delegado;
+            var notas = document.getElementById('modal-notas').value;
+            if (notas) campos.notas = notas;
+
             apiCall('/api/pendencias/' + id, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -140,7 +161,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }).then(function () { location.reload(); })
               .catch(function (err) { alert('Erro ao salvar: ' + err.message); });
         });
-    });
+    }
 
     // ── Criar tarefa ────────────────────────────────────────
     var formTarefa = document.getElementById('form-criar-tarefa');
