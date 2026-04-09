@@ -56,12 +56,22 @@ async def _notificar(texto: str, force: bool = False):
 async def briefing_matinal():
     """08:00 — Briefing matinal com contexto de ontem + plano de hoje."""
     logger.info("Executando briefing matinal v2")
-    from cerebro.db.models import get_resumo_diario
+    from cerebro.db.models import get_resumo_diario, foco_ativo, encerrar_foco
     from cerebro.db.setup import get_connection
     from cerebro.integrations.calendar import eventos_do_dia, formatar_eventos
 
-    partes = ["☀️ **Bom dia, Matheus!**\n"]
     conn = get_connection()
+
+    # Auto-fechar foco abandonado (>4h ou do dia anterior)
+    foco = foco_ativo(conn)
+    if foco:
+        inicio = datetime.fromisoformat(foco["inicio"])
+        horas = (datetime.now() - inicio).total_seconds() / 3600
+        if horas > 4 or inicio.date() < datetime.now().date():
+            encerrar_foco("cancelado", conn)
+            logger.info(f"Foco #{foco['id']} auto-encerrado (abandonado há {horas:.0f}h)")
+
+    partes = ["☀️ **Bom dia, Matheus!**\n"]
 
     # 1. Contexto de ontem (resumo_diario)
     ontem = (datetime.now() - timedelta(days=1)).date().isoformat()
@@ -122,7 +132,7 @@ async def briefing_matinal():
         pass
 
     partes.append("\n👉 Qual vai ser a primeira?")
-    await _notificar("\n".join(partes))
+    await _notificar("\n".join(partes), force=True)  # Matinal nunca é silenciada
 
 
 async def verificar_atrasadas():
@@ -130,7 +140,7 @@ async def verificar_atrasadas():
     logger.info("Verificando atrasadas")
     atr = atrasadas()
     if "Nenhuma" not in atr:
-        await _notificar(f"⏰ **Lembrete**\n\n{atr}")
+        await _notificar(f"⏰ **Lembrete**\n\n{atr}", force=True)
 
 
 async def verificar_delegacoes():
@@ -198,7 +208,7 @@ async def checkin_14h():
         partes.append(f"\n⏱️ Tempo em foco: {int(foco['minutos'])} min")
 
     partes.append("\nO que vai atacar agora?")
-    await _notificar("\n".join(partes))
+    await _notificar("\n".join(partes), force=True)  # Check-in não é silenciado
 
 
 async def encerramento_dia():
@@ -251,7 +261,7 @@ async def encerramento_dia():
     partes.append(f"\n📋 **Ficaram para amanhã:**\n{top}")
 
     partes.append("\n👉 Define as 3 de amanhã (ou diz 'sugere').")
-    await _notificar("\n".join(partes))
+    await _notificar("\n".join(partes), force=True)  # Encerramento não é silenciado
 
 
 async def followup_encerramento():
@@ -351,7 +361,7 @@ async def contas_vencendo_amanha():
     from cerebro.finance.deterministic import contas_vencendo
     resultado = contas_vencendo(dias=1)
     if "Nenhuma" not in resultado:
-        await _notificar(resultado)
+        await _notificar(resultado, force=True)
 
 
 async def contas_vencidas_alerta():
@@ -360,7 +370,7 @@ async def contas_vencidas_alerta():
     from cerebro.finance.deterministic import contas_vencidas as _contas_vencidas
     resultado = _contas_vencidas()
     if "Nenhuma" not in resultado:
-        await _notificar(resultado)
+        await _notificar(resultado, force=True)
 
 
 async def resumo_financeiro_semanal():
