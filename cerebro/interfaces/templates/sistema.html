@@ -62,6 +62,9 @@
             <tr><td>Status</td><td>"status geral", "como ta tudo"</td><td>Visao geral de todos os projetos</td></tr>
             <tr><td>Top 3</td><td>"o que faco", "prioridade"</td><td>Top 3-5 tarefas mais urgentes do dia</td></tr>
             <tr><td>Concluir</td><td>"fiz #123", "conclui tarefa 45"</td><td>Marca tarefa como concluida</td></tr>
+            <tr><td>Iniciar</td><td>"comecei a #3", "to fazendo a 5"</td><td>Marca tarefa como em andamento</td></tr>
+            <tr><td>Bloquear</td><td>"travei na #5", "bloqueei a 2"</td><td>Marca tarefa como bloqueada</td></tr>
+            <tr><td>Cancelar</td><td>"cancelei a #7", "cancela a 4"</td><td>Marca tarefa como cancelada</td></tr>
             <tr><td>Criar tarefa</td><td>"cria tarefa: revisar proposta"</td><td>Cria nova pendencia</td></tr>
             <tr><td>Review semanal</td><td>"review semanal"</td><td>Resumo da semana completa</td></tr>
             <tr><td>Agenda</td><td>"agenda da semana"</td><td>Eventos do calendario</td></tr>
@@ -119,7 +122,9 @@
     <div class="tool-grid">
         <div class="tool-card">
             <strong>pendencias</strong><br>
-            <small>Tarefas com projeto, prioridade (P1-P5), prazo, status, responsavel, delegado_para</small>
+            <small>Tarefas com projeto, prioridade (P1-P5, validada), prazo, responsavel, delegado_para.<br>
+            Status: <code>pendente</code>, <code>em_andamento</code>, <code>bloqueada</code>, <code>concluida</code>, <code>cancelada</code>.<br>
+            Paginacao via <code>limite</code>/<code>offset</code>. Nulos de prazo ordenados por ultimo.</small>
         </div>
         <div class="tool-card">
             <strong>eventos</strong><br>
@@ -135,7 +140,7 @@
         </div>
         <div class="tool-card">
             <strong>stakeholders</strong><br>
-            <small>Pessoas envolvidas em cada projeto + papel e contato</small>
+            <small>Pessoas envolvidas em cada projeto + papel, contato e telegram_id (para notificacoes de delegacao)</small>
         </div>
         <div class="tool-card">
             <strong>conversas</strong><br>
@@ -210,11 +215,14 @@
 
     <h4>Gestao de Tarefas</h4>
     <div class="tool-grid">
-        <div class="tool-card"><strong>criar_pendencia</strong><br><small>Cria nova tarefa com projeto, prioridade, prazo</small></div>
+        <div class="tool-card"><strong>criar_pendencia</strong><br><small>Cria nova tarefa com projeto, prioridade (1-5 validada), prazo</small></div>
         <div class="tool-card"><strong>concluir_pendencia</strong><br><small>Marca tarefa como concluida por ID</small></div>
-        <div class="tool-card"><strong>atualizar_pendencia</strong><br><small>Modifica campos de uma tarefa existente</small></div>
-        <div class="tool-card"><strong>listar_pendencias</strong><br><small>Consulta tarefas com filtros</small></div>
-        <div class="tool-card"><strong>delegar_tarefa</strong><br><small>Delega tarefa + gera mensagem de delegacao</small></div>
+        <div class="tool-card"><strong>iniciar_pendencia</strong><br><small>Marca tarefa como em andamento (status: em_andamento)</small></div>
+        <div class="tool-card"><strong>bloquear_pendencia</strong><br><small>Marca tarefa como bloqueada com motivo opcional</small></div>
+        <div class="tool-card"><strong>cancelar_pendencia</strong><br><small>Marca tarefa como cancelada</small></div>
+        <div class="tool-card"><strong>atualizar_pendencia</strong><br><small>Modifica campos (status validado: pendente, em_andamento, bloqueada, concluida, cancelada)</small></div>
+        <div class="tool-card"><strong>listar_pendencias</strong><br><small>Consulta tarefas com filtros + paginacao (limite/offset)</small></div>
+        <div class="tool-card"><strong>delegar_tarefa</strong><br><small>Delega tarefa + busca contato do stakeholder + gera mensagem</small></div>
         <div class="tool-card"><strong>cobrar_delegacao</strong><br><small>Gera mensagem de cobranca para delegacoes atrasadas</small></div>
     </div>
 
@@ -332,6 +340,41 @@
             <tr><td><code>/semanal</code></td><td>Review semanal completa</td></tr>
             <tr><td><code>/triggers</code></td><td>Status dos triggers condicionais</td></tr>
             <tr><td><em>Texto livre</em></td><td>Classificador analisa e roteia para funcao ou agente LLM</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- ── API REST ──────────────────────────────────────────── -->
+<div class="system-section">
+    <h3>API REST (Endpoints Principais)</h3>
+    <p>Todos os endpoints de escrita exigem header <code>X-API-Key</code>. Leitura e livre.</p>
+
+    <h4>Pendencias</h4>
+    <table>
+        <thead><tr><th>Metodo</th><th>Endpoint</th><th>O que faz</th></tr></thead>
+        <tbody>
+            <tr><td><code>GET</code></td><td><code>/api/pendencias?page=1&per_page=50&projeto=&status=</code></td><td>Lista com paginacao (retorna items, page, total)</td></tr>
+            <tr><td><code>POST</code></td><td><code>/api/pendencias</code></td><td>Cria pendencia (prioridade validada 1-5)</td></tr>
+            <tr><td><code>PUT</code></td><td><code>/api/pendencias/{id}</code></td><td>Atualiza campos (status validado)</td></tr>
+            <tr><td><code>PUT</code></td><td><code>/api/pendencias/{id}/concluir</code></td><td>Marca como concluida</td></tr>
+            <tr><td><code>PUT</code></td><td><code>/api/pendencias/{id}/iniciar</code></td><td>Marca como em andamento</td></tr>
+            <tr><td><code>PUT</code></td><td><code>/api/pendencias/{id}/bloquear</code></td><td>Marca como bloqueada</td></tr>
+            <tr><td><code>PUT</code></td><td><code>/api/pendencias/{id}/cancelar</code></td><td>Marca como cancelada</td></tr>
+            <tr><td><code>DELETE</code></td><td><code>/api/pendencias/{id}</code></td><td>Remove pendencia</td></tr>
+        </tbody>
+    </table>
+
+    <h4>Outros</h4>
+    <table>
+        <thead><tr><th>Metodo</th><th>Endpoint</th><th>O que faz</th></tr></thead>
+        <tbody>
+            <tr><td><code>GET</code></td><td><code>/api/status</code></td><td>Status geral (contagem por projeto, inclui em_andamento e bloqueada)</td></tr>
+            <tr><td><code>GET/POST</code></td><td><code>/api/eventos</code></td><td>Listar / criar eventos</td></tr>
+            <tr><td><code>GET/POST</code></td><td><code>/api/lancamentos</code></td><td>Listar / criar lancamentos financeiros</td></tr>
+            <tr><td><code>GET/POST</code></td><td><code>/api/compromissos</code></td><td>Listar / criar compromissos</td></tr>
+            <tr><td><code>GET/POST</code></td><td><code>/api/fatos</code></td><td>Listar / criar fatos de projeto</td></tr>
+            <tr><td><code>GET</code></td><td><code>/api/triggers</code></td><td>Status dos triggers condicionais</td></tr>
+            <tr><td><code>POST</code></td><td><code>/api/mensagem</code></td><td>Processa mensagem (mesmo fluxo do Telegram)</td></tr>
         </tbody>
     </table>
 </div>
