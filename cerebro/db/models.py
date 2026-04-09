@@ -145,7 +145,7 @@ def atualizar_pendencia(id: int, conn=None, **campos) -> dict | None:
     if not pendencia:
         return None
 
-    allowed = {"tarefa", "projeto", "prioridade", "prazo", "status", "responsavel", "delegado_para", "notas"}
+    allowed = {"tarefa", "projeto", "prioridade", "prazo", "status", "responsavel", "delegado_para", "notas", "tempo_estimado_min"}
     updates = {k: v for k, v in campos.items() if k in allowed and v is not None}
     if not updates:
         return pendencia
@@ -390,3 +390,149 @@ def get_resumo(projeto: str, conn=None) -> str | None:
     conn = conn or get_connection()
     row = conn.execute("SELECT resumo FROM resumo_projeto WHERE projeto = ?", (projeto,)).fetchone()
     return row["resumo"] if row else None
+
+
+# ── Modo Foco ──────────────────────────────────────────────
+
+
+def foco_ativo(conn=None) -> dict | None:
+    """Retorna sessão de foco ativa/pausada, ou None."""
+    conn = conn or get_connection()
+    row = conn.execute(
+        "SELECT * FROM foco WHERE status IN ('ativo', 'pausado') ORDER BY inicio DESC LIMIT 1"
+    ).fetchone()
+    return _row_to_dict(row)
+
+
+def iniciar_foco(pendencia_id: int, projeto: str, conn=None) -> dict:
+    """Inicia sessão de foco. Retorna dict ou erro se já tem foco ativo."""
+    conn = conn or get_connection()
+    ativo = foco_ativo(conn)
+    if ativo:
+        raise ValueError(f"Já existe foco ativo na tarefa #{ativo['pendencia_id']}")
+    now = datetime.now().isoformat()
+    cursor = conn.execute(
+        "INSERT INTO foco (pendencia_id, projeto, inicio) VALUES (?, ?, ?)",
+        (pendencia_id, projeto, now),
+    )
+    conn.commit()
+    return _row_to_dict(conn.execute("SELECT * FROM foco WHERE id = ?", (cursor.lastrowid,)).fetchone())
+
+
+def pausar_foco(conn=None) -> dict | None:
+    """Pausa o foco ativo."""
+    conn = conn or get_connection()
+    ativo = foco_ativo(conn)
+    if not ativo or ativo["status"] != "ativo":
+        return None
+    now = datetime.now().isoformat()
+    conn.execute(
+        "UPDATE foco SET status = 'pausado', pausado_em = ? WHERE id = ?",
+        (now, ativo["id"]),
+    )
+    conn.commit()
+    return _row_to_dict(conn.execute("SELECT * FROM foco WHERE id = ?", (ativo["id"],)).fetchone())
+
+
+def retomar_foco(conn=None) -> dict | None:
+    """Retoma foco pausado, acumulando tempo de pausa."""
+    conn = conn or get_connection()
+    ativo = foco_ativo(conn)
+    if not ativo or ativo["status"] != "pausado":
+        return None
+    pausado_em = datetime.fromisoformat(ativo["pausado_em"])
+    segundos_pausa = int((datetime.now() - pausado_em).total_seconds())
+    novo_total = (ativo["tempo_pausado_s"] or 0) + segundos_pausa
+    conn.execute(
+        "UPDATE foco SET status = 'ativo', pausado_em = NULL, tempo_pausado_s = ? WHERE id = ?",
+        (novo_total, ativo["id"]),
+    )
+    conn.commit()
+    return _row_to_dict(conn.execute("SELECT * FROM foco WHERE id = ?", (ativo["id"],)).fetchone())
+
+
+def encerrar_foco(resultado: str = "concluido", conn=None) -> dict | None:
+    """Encerra foco ativo/pausado. Calcula duração total."""
+    conn = conn or get_connection()
+    ativo = foco_ativo(conn)
+    if not ativo:
+        return None
+    now = datetime.now()
+    # Se estava pausado, acumular tempo de pausa restante
+    tempo_pausado = ativo["tempo_pausado_s"] or 0
+    if ativo["status"] == "pausado" and ativo["pausado_em"]:
+        pausado_em = datetime.fromisoformat(ativo["pausado_em"])
+        tempo_pausado += int((now - pausado_em).total_seconds())
+    conn.execute(
+        "UPDATE foco SET status = ?, fim = ?, tempo_pausado_s = ? WHERE id = ?",
+        (resultado, now.isoformat(), tempo_pausado, ativo["id"]),
+    )
+    conn.commit()
+    return _row_to_dict(conn.execute("SELECT * FROM foco WHERE id = ?", (ativo["id"],)).fetchone())
+
+
+# ── Resumo Diário ──────────────────────────────────────────
+
+
+def salvar_resumo_diario(
+    data: str,
+    tarefas_concluidas: str | None = None,
+    tarefas_iniciadas: str | None = None,
+    tempo_foco_min: int = 0,
+    projetos_trabalhados: str | None = None,
+    eventos_amanha: str | None = None,
+    notas: str | None = None,
+    conn=None,
+) -> dict:
+    conn = conn or get_connection()
+    conn.execute(
+        """INSERT INTO resumo_diario
+           (data, tarefas_concluidas, tarefas_iniciadas, tempo_foco_min,
+            projetos_trabalhados, eventos_amanha, notas)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(data) DO UPDATE SET
+            tarefas_concluidas=?, tarefas_iniciadas=?, tempo_foco_min=?,
+            projetos_trabalhados=?, eventos_amanha=?, notas=?""",
+        (data, tarefas_concluidas, tarefas_iniciadas, tempo_foco_min,
+         projetos_trabalhados, eventos_amanha, notas,
+         tarefas_concluidas, tarefas_iniciadas, tempo_foco_min,
+         projetos_trabalhados, eventos_amanha, notas),
+    )
+    conn.commit()
+    return get_resumo_diario(data, conn)
+
+
+def get_resumo_diario(data: str, conn=None) -> dict | None:
+    conn = conn or get_connection()
+    row = conn.execute("SELECT * FROM resumo_diario WHERE data = ?", (data,)).fetchone()
+    return _row_to_dict(row)
+
+
+# ── Estimativas de Tempo ───────────────────────────────────
+
+ESTIMATIVAS_PADRAO = {
+    "mandar mensagem": 2, "mandar msg": 2, "enviar msg": 2,
+    "ligar": 10, "telefonar": 10,
+    "cobrar": 5,
+    "criar criativo": 45, "criativo": 45,
+    "editar": 30,
+    "ajustar campanha": 30, "campanha": 30,
+    "fazer proposta": 120, "proposta": 120,
+    "estudar": 60,
+    "revisar": 30, "review": 30,
+    "emitir nf": 15, "nota fiscal": 15,
+    "reunião": 60, "reuniao": 60,
+    "pesquisar": 45, "pesquisa": 45,
+    "instalar": 60, "instalação": 60, "instalacao": 60,
+    "testar": 30, "teste": 30,
+    "bug": 45, "corrigir": 45, "fix": 45,
+}
+
+
+def estimar_tempo(tarefa: str, conn=None) -> int | None:
+    """Estima tempo em minutos baseado em keywords da tarefa."""
+    tarefa_lower = tarefa.lower()
+    for pattern, minutos in ESTIMATIVAS_PADRAO.items():
+        if pattern in tarefa_lower:
+            return minutos
+    return None

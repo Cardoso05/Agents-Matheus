@@ -282,3 +282,78 @@ class TestResumoSemanal:
         assert "Review Semanal" in result
         assert "Criadas" in result
         assert "Concluídas" in result
+
+
+class TestFocoMode:
+
+    def test_iniciar_foco(self, conn):
+        result = deterministic.det_iniciar_foco(1, conn=conn)
+        assert "Modo Foco ativado" in result
+        assert "#1" in result
+
+    def test_foco_duplicado(self, conn):
+        deterministic.det_iniciar_foco(1, conn=conn)
+        result = deterministic.det_iniciar_foco(2, conn=conn)
+        assert "Já existe foco ativo" in result
+
+    def test_foco_inexistente(self, conn):
+        result = deterministic.det_iniciar_foco(999, conn=conn)
+        assert "❌" in result
+
+    def test_pausar_foco(self, conn):
+        deterministic.det_iniciar_foco(1, conn=conn)
+        result = deterministic.det_pausar_foco(conn=conn)
+        assert "pausado" in result.lower()
+
+    def test_retomar_foco(self, conn):
+        deterministic.det_iniciar_foco(1, conn=conn)
+        deterministic.det_pausar_foco(conn=conn)
+        result = deterministic.det_retomar_foco(conn=conn)
+        assert "retomado" in result.lower()
+
+    def test_encerrar_foco(self, conn):
+        deterministic.det_iniciar_foco(1, conn=conn)
+        result = deterministic.det_encerrar_foco(conn=conn)
+        assert "encerrado" in result.lower()
+
+    def test_encerrar_sem_foco(self, conn):
+        result = deterministic.det_encerrar_foco(conn=conn)
+        assert "❌" in result
+
+    def test_status_foco(self, conn):
+        deterministic.det_iniciar_foco(1, conn=conn)
+        result = deterministic.det_status_foco(conn=conn)
+        assert "Foco" in result
+        assert "#1" in result
+
+
+class TestResumoAtividade:
+
+    def test_hoje_com_dados(self, conn):
+        # Seed já conclui #8 "hoje"
+        result = deterministic.resumo_atividade("hoje", conn=conn)
+        assert "Concluídas" in result or "Nenhuma" in result
+        assert "hoje" in result.lower()
+
+    def test_ontem(self, conn):
+        result = deterministic.resumo_atividade("ontem", conn=conn)
+        assert "ontem" in result.lower()
+
+
+class TestEstimativaTempo:
+
+    def test_keyword_conhecida(self, conn):
+        result = models.estimar_tempo("mandar mensagem pro pai")
+        assert result == 2
+
+    def test_keyword_reuniao(self, conn):
+        result = models.estimar_tempo("reunião com Victor")
+        assert result == 60
+
+    def test_sem_keyword(self, conn):
+        result = models.estimar_tempo("algo genérico")
+        assert result is None
+
+    def test_auto_estimativa_criar_tarefa(self, conn):
+        result = deterministic.criar_tarefa("mandar msg pro pai", "wipr", conn=conn)
+        assert "~2 min" in result

@@ -316,3 +316,60 @@ class TestNovosStatus:
         assert r["handler"] == "deterministic"
         assert r["func"] == "cancelar_tarefa"
         assert r["args"]["id"] == 4
+
+
+class TestFocoPatterns:
+    """Testes para classificação de modo foco."""
+
+    def test_foco_na_5(self):
+        r = classificar("foco na #5")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "det_iniciar_foco"
+        assert r["args"]["id"] == 5
+
+    def test_focar_na_3(self):
+        r = classificar("focar na tarefa 3")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "det_iniciar_foco"
+        assert r["args"]["id"] == 3
+
+    def test_encerrar_foco(self):
+        r = classificar("encerrar foco")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "det_encerrar_foco"
+
+    def test_pausar_foco(self):
+        r = classificar("pausar foco")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "det_pausar_foco"
+
+    def test_retomar_foco(self):
+        r = classificar("retomar foco")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "det_retomar_foco"
+
+    def test_status_foco(self):
+        r = classificar("status foco")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "det_status_foco"
+
+
+class TestAtividadePatterns:
+    """Testes para classificação de resumo de atividade."""
+
+    def test_o_que_fiz_hoje(self):
+        r = classificar("o que eu fiz hoje?")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "resumo_atividade"
+        assert r["args"]["dia"] == "hoje"
+
+    def test_o_que_fiz_ontem(self):
+        r = classificar("o que fiz ontem?")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "resumo_atividade"
+        assert r["args"]["dia"] == "ontem"
+
+    def test_produtividade(self):
+        r = classificar("produtividade")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "resumo_atividade"

@@ -9,6 +9,9 @@ from cerebro.db.setup import get_connection
 
 logger = logging.getLogger(__name__)
 
+# Último erro de sync com Google Calendar (para diagnóstico)
+_last_google_error: str | None = None
+
 # ── CRUD de eventos ─────────────────────────────────────────
 
 
@@ -176,7 +179,7 @@ def _get_google_service():
 
         return build("calendar", "v3", credentials=creds)
     except ImportError:
-        logger.debug("Google Calendar libraries not installed. Using local calendar only.")
+        logger.warning("Google Calendar libraries not installed. Using local calendar only.")
         return None
     except Exception as e:
         logger.warning(f"Google Calendar auth failed: {e}. Using local calendar only.")
@@ -204,20 +207,25 @@ def _build_google_body(evento: dict) -> dict:
 
 def _sync_create_google(evento: dict) -> str | None:
     """Cria evento no Google Calendar. Retorna event_id ou None."""
+    global _last_google_error
     service = _get_google_service()
     if not service:
+        _last_google_error = "Google Calendar não configurado (credenciais ausentes)"
         return None
     try:
         body = _build_google_body(evento)
         result = service.events().insert(calendarId="primary", body=body).execute()
+        _last_google_error = None
         return result.get("id")
     except Exception as e:
+        _last_google_error = str(e)
         logger.error(f"Erro ao criar no Google Calendar: {e}")
         return None
 
 
 def _sync_update_google(evento: dict) -> bool:
     """Atualiza evento no Google Calendar."""
+    global _last_google_error
     service = _get_google_service()
     if not service:
         return False
@@ -231,12 +239,14 @@ def _sync_update_google(evento: dict) -> bool:
         logger.info(f"Evento '{evento['titulo']}' atualizado no Google Calendar")
         return True
     except Exception as e:
+        _last_google_error = str(e)
         logger.error(f"Erro ao atualizar no Google Calendar: {e}")
         return False
 
 
 def _sync_delete_google(google_event_id: str) -> bool:
     """Deleta evento do Google Calendar."""
+    global _last_google_error
     service = _get_google_service()
     if not service:
         return False
@@ -248,12 +258,22 @@ def _sync_delete_google(google_event_id: str) -> bool:
         logger.info(f"Evento {google_event_id} deletado do Google Calendar")
         return True
     except Exception as e:
+        _last_google_error = str(e)
         logger.error(f"Erro ao deletar do Google Calendar: {e}")
         return False
 
 
 # Alias for backwards compatibility
 sync_to_google = _sync_create_google
+
+
+def google_calendar_status() -> dict:
+    """Retorna status da conexão com Google Calendar."""
+    service = _get_google_service()
+    return {
+        "connected": service is not None,
+        "last_error": _last_google_error,
+    }
 
 
 # ── Formatação ──────────────────────────────────────────────

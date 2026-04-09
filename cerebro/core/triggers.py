@@ -390,6 +390,31 @@ def _formatar_padrao_madrugada(dados: list[dict]) -> str:
     )
 
 
+# ── Lote 4: Produtividade ─────────────────────────────────────
+
+
+def _avaliar_troca_contexto(conn) -> list[dict] | None:
+    rows = conn.execute(
+        """SELECT DISTINCT projeto FROM historico
+           WHERE timestamp >= datetime('now', '-4 hours')
+             AND projeto IS NOT NULL"""
+    ).fetchall()
+    if len(rows) >= 4:
+        return [{"projetos": [r["projeto"] for r in rows], "total": len(rows)}]
+    return None
+
+
+def _formatar_troca_contexto(dados: list[dict]) -> str:
+    d = dados[0]
+    projs = ", ".join(p.upper() for p in d["projetos"])
+    return (
+        f"🔀 **Troca de contexto excessiva**\n\n"
+        f"{d['total']} projetos nas últimas 4h: {projs}\n\n"
+        "Cada troca custa ~20 min de refoco.\n"
+        "Escolhe UM projeto e vai fundo."
+    )
+
+
 # ── Registry ──────────────────────────────────────────────────
 
 TRIGGERS: dict[str, TriggerDef] = {
@@ -460,5 +485,11 @@ TRIGGERS: dict[str, TriggerDef] = {
         id="T11", nome="Padrão madrugada", cooldown_horas=168,
         prioridade="baixa", descricao="3+ interações entre 1h-5h na semana",
         avaliar=_avaliar_padrao_madrugada, formatar=_formatar_padrao_madrugada,
+    ),
+    # Lote 4 — Produtividade
+    "T14": TriggerDef(
+        id="T14", nome="Troca de contexto", cooldown_horas=4,
+        prioridade="media", descricao="4+ projetos tocados em 4 horas",
+        avaliar=_avaliar_troca_contexto, formatar=_formatar_troca_contexto,
     ),
 }

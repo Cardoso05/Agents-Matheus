@@ -44,6 +44,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     """Migrations aditivas — safe para rodar múltiplas vezes."""
     migrations = [
         "ALTER TABLE stakeholders ADD COLUMN telegram_id TEXT",
+        "ALTER TABLE pendencias ADD COLUMN tempo_estimado_min INTEGER",
     ]
     for sql in migrations:
         try:
@@ -278,4 +279,31 @@ CREATE TABLE IF NOT EXISTS trigger_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_trigger_log_recent ON trigger_log(trigger_id, timestamp DESC);
+
+-- ══ Modo Foco ══
+
+CREATE TABLE IF NOT EXISTS foco (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    pendencia_id    INTEGER,
+    projeto         TEXT,
+    inicio          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fim             DATETIME,
+    pausado_em      DATETIME,
+    tempo_pausado_s INTEGER DEFAULT 0,
+    status          TEXT DEFAULT 'ativo' CHECK(status IN ('ativo','pausado','concluido','cancelado')),
+    FOREIGN KEY (pendencia_id) REFERENCES pendencias(id) ON DELETE SET NULL
+);
+
+-- ══ Resumo Diário ══
+
+CREATE TABLE IF NOT EXISTS resumo_diario (
+    data                DATE PRIMARY KEY,
+    tarefas_concluidas  TEXT,
+    tarefas_iniciadas   TEXT,
+    tempo_foco_min      INTEGER DEFAULT 0,
+    projetos_trabalhados TEXT,
+    eventos_amanha      TEXT,
+    notas               TEXT,
+    criado_em           DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 """

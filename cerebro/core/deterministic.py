@@ -242,17 +242,26 @@ def criar_tarefa(
         conn=conn,
     )
 
+    # Auto-estimar tempo se não fornecido
+    from cerebro.db.models import estimar_tempo, atualizar_pendencia
+    est = estimar_tempo(tarefa)
+    tempo_str = ""
+    if est:
+        atualizar_pendencia(p["id"], tempo_estimado_min=est, conn=conn)
+        tempo_str = f"\nTempo estimado: ~{est} min"
+
     info = PROJETOS.get(projeto, {})
     nome = info.get("nome", projeto.upper())
     prazo_str = f"\nPrazo: {prazo}" if prazo else ""
 
-    return f"✅ Tarefa #{p['id']} criada [{nome}]\n{tarefa}{prazo_str}"
+    return f"✅ Tarefa #{p['id']} criada [{nome}]\n{tarefa}{prazo_str}{tempo_str}"
 
 
 def concluir_tarefa(id: int, conn=None) -> str:
-    """Marca tarefa como concluída e sugere a próxima."""
-    from cerebro.db.models import concluir_pendencia, listar_pendencias
+    """Marca tarefa como concluída, encerra foco se ativo, e sugere a próxima."""
+    from cerebro.db.models import concluir_pendencia, listar_pendencias, foco_ativo, encerrar_foco
 
+    conn = conn or get_connection()
     p = concluir_pendencia(id, conn=conn)
     if not p:
         return f"❌ Tarefa #{id} não encontrada."
@@ -260,6 +269,16 @@ def concluir_tarefa(id: int, conn=None) -> str:
     info = PROJETOS.get(p["projeto"], {})
     nome = info.get("nome", p["projeto"].upper())
     result = f"✅ Tarefa #{id} concluída: {p['tarefa']} [{nome}]"
+
+    # Encerrar foco se a tarefa concluída é a do foco ativo
+    foco = foco_ativo(conn)
+    if foco and foco["pendencia_id"] == id:
+        foco_enc = encerrar_foco("concluido", conn)
+        if foco_enc:
+            inicio = datetime.fromisoformat(foco_enc["inicio"])
+            pausado = (foco_enc["tempo_pausado_s"] or 0) / 60
+            duracao = int((datetime.now() - inicio).total_seconds() / 60 - pausado)
+            result += f"\n⏹️ Foco encerrado ({duracao} min)"
 
     # Sugerir próxima do mesmo projeto
     pendentes = listar_pendencias(projeto=p["projeto"], status="pendente", conn=conn)
@@ -336,6 +355,183 @@ def delegar_tarefa_det(id: int, pessoa: str, conn=None) -> str:
 
     result += f"\n💡 Lembre de notificar {pessoa} sobre a delegação."
     return result
+
+
+# ── Modo Foco ──────────────────────────────────────────────
+
+
+def det_iniciar_foco(id: int, conn=None) -> str:
+    """Inicia modo foco em uma tarefa."""
+    from cerebro.db.models import foco_ativo, iniciar_foco, iniciar_pendencia, get_pendencia
+
+    conn = conn or get_connection()
+    pendencia = get_pendencia(id, conn)
+    if not pendencia:
+        return f"❌ Tarefa #{id} não encontrada."
+
+    # Checar foco ativo
+    ativo = foco_ativo(conn)
+    if ativo:
+        return (
+            f"⚠️ Já existe foco ativo na #{ativo['pendencia_id']}.\n"
+            f"Encerre com 'encerrar foco' antes de iniciar outro."
+        )
+
+    # Marcar como em andamento
+    if pendencia["status"] == "pendente":
+        iniciar_pendencia(id, conn)
+
+    foco = iniciar_foco(id, pendencia["projeto"], conn)
+    info = PROJETOS.get(pendencia["projeto"], {})
+    nome = info.get("nome", pendencia["projeto"].upper())
+    tempo = f"~{pendencia['tempo_estimado_min']} min" if pendencia.get("tempo_estimado_min") else "sem estimativa"
+
+    return (
+        f"🎯 **Modo Foco ativado**\n\n"
+        f"Tarefa: #{id} {pendencia['tarefa']}\n"
+        f"Projeto: {nome}\n"
+        f"Tempo estimado: {tempo}\n"
+        f"Iniciado: {datetime.now().strftime('%H:%M')}\n\n"
+        f"Quando terminar:\n"
+        f"• 'fiz a {id}' → conclui\n"
+        f"• 'travei na {id}' → bloqueia\n"
+        f"• 'pausar foco' → pausa"
+    )
+
+
+def det_encerrar_foco(conn=None) -> str:
+    """Encerra foco ativo."""
+    from cerebro.db.models import foco_ativo, encerrar_foco
+
+    conn = conn or get_connection()
+    ativo = foco_ativo(conn)
+    if not ativo:
+        return "❌ Nenhum foco ativo no momento."
+
+    foco = encerrar_foco("concluido", conn)
+    inicio = datetime.fromisoformat(foco["inicio"])
+    pausado = (foco["tempo_pausado_s"] or 0) / 60
+    duracao_total = int((datetime.now() - inicio).total_seconds() / 60)
+    duracao_liquida = int(duracao_total - pausado)
+
+    return (
+        f"⏹️ **Foco encerrado**\n\n"
+        f"Tarefa: #{foco['pendencia_id']}\n"
+        f"Duração: {duracao_liquida} min (líquido)\n"
+        f"Bom trabalho!"
+    )
+
+
+def det_pausar_foco(conn=None) -> str:
+    """Pausa foco ativo."""
+    from cerebro.db.models import pausar_foco
+
+    conn = conn or get_connection()
+    foco = pausar_foco(conn)
+    if not foco:
+        return "❌ Nenhum foco ativo para pausar."
+    return f"⏸️ Foco pausado (tarefa #{foco['pendencia_id']}). Diz 'retomar foco' pra voltar."
+
+
+def det_retomar_foco(conn=None) -> str:
+    """Retoma foco pausado."""
+    from cerebro.db.models import retomar_foco
+
+    conn = conn or get_connection()
+    foco = retomar_foco(conn)
+    if not foco:
+        return "❌ Nenhum foco pausado para retomar."
+    return f"▶️ Foco retomado (tarefa #{foco['pendencia_id']}). Boa!"
+
+
+def det_status_foco(conn=None) -> str:
+    """Mostra status do foco atual."""
+    from cerebro.db.models import foco_ativo, get_pendencia
+
+    conn = conn or get_connection()
+    foco = foco_ativo(conn)
+    if not foco:
+        return "Nenhum foco ativo no momento."
+
+    pendencia = get_pendencia(foco["pendencia_id"], conn)
+    tarefa_nome = pendencia["tarefa"] if pendencia else "?"
+    inicio = datetime.fromisoformat(foco["inicio"])
+    minutos = int((datetime.now() - inicio).total_seconds() / 60)
+    pausado = int((foco["tempo_pausado_s"] or 0) / 60)
+    status_str = "⏸️ pausado" if foco["status"] == "pausado" else "🎯 ativo"
+
+    return (
+        f"🎯 **Foco {status_str}**\n\n"
+        f"Tarefa: #{foco['pendencia_id']} {tarefa_nome}\n"
+        f"Projeto: {foco['projeto']}\n"
+        f"Tempo: {minutos - pausado} min (líquido)"
+    )
+
+
+# ── Resumo de Atividade ───────────────────────────────────
+
+
+def resumo_atividade(dia: str = "hoje", conn=None) -> str:
+    """Mostra o que foi feito hoje ou ontem."""
+    conn = conn or get_connection()
+    if dia == "ontem":
+        data = (datetime.now() - timedelta(days=1)).date().isoformat()
+        label = "ontem"
+    else:
+        data = datetime.now().date().isoformat()
+        label = "hoje"
+
+    # Ações do dia agrupadas
+    concluidas = conn.execute(
+        """SELECT p.id, p.tarefa, p.projeto FROM pendencias p
+           JOIN historico h ON h.pendencia_id = p.id
+           WHERE h.acao = 'concluida' AND date(h.timestamp) = ?
+           GROUP BY p.id""", (data,)
+    ).fetchall()
+
+    iniciadas = conn.execute(
+        """SELECT p.id, p.tarefa, p.projeto FROM pendencias p
+           JOIN historico h ON h.pendencia_id = p.id
+           WHERE h.acao = 'iniciada' AND date(h.timestamp) = ?
+           GROUP BY p.id""", (data,)
+    ).fetchall()
+
+    # Foco do dia
+    foco = conn.execute(
+        """SELECT COUNT(*) as sessoes, COALESCE(SUM(
+            CASE WHEN fim IS NOT NULL THEN
+                (julianday(fim) - julianday(inicio)) * 1440 - tempo_pausado_s / 60.0
+            ELSE 0 END
+        ), 0) as minutos FROM foco WHERE date(inicio) = ?""", (data,)
+    ).fetchone()
+
+    # Projetos tocados
+    projetos = conn.execute(
+        "SELECT DISTINCT projeto FROM historico WHERE date(timestamp) = ?", (data,)
+    ).fetchall()
+
+    lines = [f"📊 **O que {'rolou' if dia == 'ontem' else 'rolou até agora'} {label}:**\n"]
+
+    if concluidas:
+        lines.append(f"✅ **Concluídas ({len(concluidas)}):**")
+        for r in concluidas:
+            lines.append(f"  • #{r['id']} {r['tarefa'][:40]} [{r['projeto'].upper()}]")
+    else:
+        lines.append("❌ Nenhuma tarefa concluída.")
+
+    if iniciadas:
+        lines.append(f"\n🔄 **Iniciadas ({len(iniciadas)}):**")
+        for r in iniciadas:
+            lines.append(f"  • #{r['id']} {r['tarefa'][:40]}")
+
+    if foco and foco["minutos"] > 0:
+        lines.append(f"\n⏱️ Foco: {int(foco['minutos'])} min ({foco['sessoes']} sessões)")
+
+    if projetos:
+        nomes = [PROJETOS.get(r["projeto"], {}).get("nome", r["projeto"].upper()) for r in projetos]
+        lines.append(f"\n📁 Projetos tocados: {', '.join(nomes)}")
+
+    return "\n".join(lines)
 
 
 def eventos_semana(conn=None) -> str:

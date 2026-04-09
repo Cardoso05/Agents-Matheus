@@ -12,15 +12,25 @@ from telegram.ext import (
     filters,
 )
 
-from cerebro.core.classifier import classificar
+from cerebro.core.classifier import classificar, detectar_projeto
 from cerebro.core.deterministic import (
     atrasadas,
+    bloquear_tarefa,
+    cancelar_tarefa,
     concluir_tarefa,
     criar_tarefa,
     delegacoes_pendentes,
+    delegar_tarefa_det,
+    det_encerrar_foco,
+    det_iniciar_foco,
+    det_pausar_foco,
+    det_retomar_foco,
+    det_status_foco,
     eventos_semana,
+    iniciar_tarefa,
     pendencias_projeto,
     projetos_parados,
+    resumo_atividade,
     resumo_semanal,
     status_geral,
     top_n_do_dia,
@@ -59,6 +69,16 @@ DETERMINISTIC_FUNCS = {
     "pendencias_projeto": pendencias_projeto,
     "criar_tarefa": criar_tarefa,
     "concluir_tarefa": concluir_tarefa,
+    "iniciar_tarefa": iniciar_tarefa,
+    "bloquear_tarefa": bloquear_tarefa,
+    "cancelar_tarefa": cancelar_tarefa,
+    "delegar_tarefa_det": delegar_tarefa_det,
+    "det_iniciar_foco": det_iniciar_foco,
+    "det_encerrar_foco": det_encerrar_foco,
+    "det_pausar_foco": det_pausar_foco,
+    "det_retomar_foco": det_retomar_foco,
+    "det_status_foco": det_status_foco,
+    "resumo_atividade": resumo_atividade,
     "resumo_semanal": resumo_semanal,
     "eventos_semana": eventos_semana,
     "registrar_gasto": registrar_gasto_rapido,
@@ -236,6 +256,52 @@ def _tempo_relativo(timestamp_str: str) -> str:
         return "?"
 
 
+async def _interceptar_foco(texto: str, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Intercepta mensagens durante foco ativo. Retorna True se interceptou."""
+    from cerebro.db.models import foco_ativo, get_pendencia
+    from datetime import datetime
+
+    foco = foco_ativo()
+    if not foco or foco["status"] != "ativo":
+        return False
+
+    texto_lower = texto.lower()
+
+    # Sempre deixa passar comandos de foco
+    foco_cmds = [
+        "encerrar foco", "parar foco", "pausar foco", "sai do foco",
+        "saí do foco", "fim do foco", "status foco", "retomar foco",
+    ]
+    if any(cmd in texto_lower for cmd in foco_cmds):
+        return False
+
+    # Sempre deixa passar conclusão/bloqueio da tarefa em foco
+    result = classificar(texto)
+    task_id = result.get("args", {}).get("id")
+    if task_id == foco["pendencia_id"] and result.get("func") in (
+        "concluir_tarefa", "bloquear_tarefa", "iniciar_tarefa",
+    ):
+        return False
+
+    # Detectar troca de projeto
+    projeto_msg = detectar_projeto(texto)
+    if projeto_msg and projeto_msg != foco.get("projeto"):
+        pendencia = get_pendencia(foco["pendencia_id"])
+        tarefa_nome = pendencia["tarefa"][:40] if pendencia else "?"
+        inicio = datetime.fromisoformat(foco["inicio"])
+        minutos = int((datetime.now() - inicio).total_seconds() / 60)
+        await _safe_reply(
+            update.message,
+            f"⚠️ **Modo Foco ativo** ({minutos} min)\n"
+            f"Trabalhando em: #{foco['pendencia_id']} {tarefa_nome} [{foco['projeto'].upper()}]\n\n"
+            f"Você está mudando para {projeto_msg.upper()}.\n"
+            f"Quer continuar? Diz 'encerrar foco' antes ou responda novamente."
+        )
+        return True
+
+    return False
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler de mensagens de texto genéricas."""
     if not _is_authorized(update.effective_user.id):
@@ -244,6 +310,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     texto = update.message.text
     if not texto:
+        return
+
+    # Interceptor de foco — avisa sobre troca de projeto
+    interceptado = await _interceptar_foco(texto, update, context)
+    if interceptado:
         return
 
     # Indica que está processando

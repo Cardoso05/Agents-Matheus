@@ -46,12 +46,13 @@ def _inserir_pendencia(conn, **kw):
 
 
 class TestTriggerRegistry:
-    def test_todos_13_triggers_registrados(self):
-        assert len(TRIGGERS) == 13
+    def test_todos_14_triggers_registrados(self):
+        assert len(TRIGGERS) == 14
 
     def test_ids_esperados(self):
         ids = set(TRIGGERS.keys())
         esperados = {f"T{n:02d}" for n in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]}
+        esperados.add("T14")
         assert ids == esperados
 
     def test_todos_tem_avaliar_e_formatar(self):
@@ -191,7 +192,7 @@ class TestTriggerEngine:
 class TestHelpers:
     def test_listar_status(self, conn):
         status = listar_status_triggers(conn)
-        assert len(status) == 13
+        assert len(status) == 14
         assert all("id" in s for s in status)
         assert all("nome" in s for s in status)
 

@@ -390,6 +390,43 @@ def api_mensagem(m: Mensagem):
     return {"resposta": response}
 
 
+# ── Foco API ──────────────────────────────────────────────────
+
+
+@app.get("/api/foco/ativo")
+def api_foco_ativo():
+    foco = models.foco_ativo()
+    return foco or {"status": "nenhum"}
+
+
+@app.get("/api/foco/metricas")
+def api_foco_metricas(dias: int = 7):
+    from cerebro.db.setup import get_connection
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT date(inicio) as dia,
+                  COUNT(*) as sessoes,
+                  COALESCE(SUM(
+                      CASE WHEN status='concluido' THEN
+                          (julianday(fim) - julianday(inicio)) * 1440 - tempo_pausado_s / 60.0
+                      ELSE 0 END
+                  ), 0) as minutos_foco,
+                  GROUP_CONCAT(DISTINCT projeto) as projetos
+           FROM foco
+           WHERE inicio >= datetime('now', ?)
+           GROUP BY date(inicio)
+           ORDER BY dia DESC""",
+        (f"-{dias} days",),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/calendario/status")
+def api_calendar_status():
+    from cerebro.integrations.calendar import google_calendar_status
+    return google_calendar_status()
+
+
 # ── Fatos / Contexto API ──────────────────────────────────────
 
 

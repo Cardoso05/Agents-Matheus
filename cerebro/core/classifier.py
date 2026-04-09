@@ -184,7 +184,36 @@ def classificar(mensagem: str) -> dict:
         logger.info("MSG=%s → handler=%s func=%s id=%d", msg[:80], result["handler"], result.get("func"), task_id)
         return result
 
-    # 4b. Iniciar tarefa
+    # 4b. Modo Foco — iniciar com tarefa
+    foco_match = re.search(
+        r"(foco|focar|focando|entrei em foco)\b.*?(?:na?\s+)?(?:tarefa\s*)?#?(\d+)",
+        msg_lower,
+    )
+    if foco_match:
+        task_id = int(foco_match.group(2))
+        result = {"handler": "deterministic", "func": "det_iniciar_foco", "args": {"id": task_id}}
+        logger.info("MSG=%s → handler=%s func=%s id=%d", msg[:80], result["handler"], result.get("func"), task_id)
+        return result
+
+    # 4b2. Modo Foco — controles
+    if _match(msg, ["encerrar foco", "parar foco", "saí do foco", "sai do foco", "fim do foco"]):
+        result = {"handler": "deterministic", "func": "det_encerrar_foco"}
+        logger.info("MSG=%s → handler=%s func=%s", msg[:80], result["handler"], result.get("func"))
+        return result
+    if _match(msg, ["pausar foco", "pausa foco"]):
+        result = {"handler": "deterministic", "func": "det_pausar_foco"}
+        logger.info("MSG=%s → handler=%s func=%s", msg[:80], result["handler"], result.get("func"))
+        return result
+    if _match(msg, ["retomar foco", "voltar ao foco", "continuar foco"]):
+        result = {"handler": "deterministic", "func": "det_retomar_foco"}
+        logger.info("MSG=%s → handler=%s func=%s", msg[:80], result["handler"], result.get("func"))
+        return result
+    if _match(msg, ["status foco", "como tá o foco", "como ta o foco"]):
+        result = {"handler": "deterministic", "func": "det_status_foco"}
+        logger.info("MSG=%s → handler=%s func=%s", msg[:80], result["handler"], result.get("func"))
+        return result
+
+    # 4c. Iniciar tarefa (sem foco)
     iniciar_match = re.search(
         r"(comecei|iniciei|to fazendo|estou fazendo|começando|comecando)\b.*?(?:tarefa\s*)?#?(\d+)",
         msg_lower,
@@ -287,6 +316,19 @@ def classificar(mensagem: str) -> dict:
             }
             logger.info("MSG=%s → handler=%s func=%s valor=%.2f", msg[:80], result["handler"], result.get("func"), float(valor_str))
             return result
+
+    # 12. Resumo de atividade: "o que eu fiz hoje", "o que fiz ontem"
+    if _match(msg, ["o que eu fiz ontem", "o que fiz ontem"]):
+        result = {"handler": "deterministic", "func": "resumo_atividade", "args": {"dia": "ontem"}}
+        logger.info("MSG=%s → handler=%s func=%s", msg[:80], result["handler"], result.get("func"))
+        return result
+    if _match(msg, [
+        "o que eu fiz hoje", "o que fiz hoje", "o que eu fiz",
+        "o que foi feito", "produtividade", "meu progresso",
+    ]):
+        result = {"handler": "deterministic", "func": "resumo_atividade", "args": {"dia": "hoje"}}
+        logger.info("MSG=%s → handler=%s func=%s", msg[:80], result["handler"], result.get("func"))
+        return result
 
     # 14. Consulta simples de projeto
     projeto = detectar_projeto(msg)
