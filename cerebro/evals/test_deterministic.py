@@ -3,6 +3,7 @@
 import pytest
 from datetime import datetime, timedelta
 
+from cerebro.clock import agora
 from cerebro.db.setup import get_test_connection
 from cerebro.db import models
 from cerebro.core import deterministic
@@ -18,7 +19,7 @@ def conn():
 
 def _seed_test_data(conn):
     """Popula banco de teste com dados conhecidos."""
-    today = datetime.now().date()
+    today = agora().date()
     yesterday = (today - timedelta(days=1)).isoformat()
     last_week = (today - timedelta(days=7)).isoformat()
     next_week = (today + timedelta(days=7)).isoformat()

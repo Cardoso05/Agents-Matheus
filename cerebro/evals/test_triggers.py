@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from cerebro.clock import agora
+
 from cerebro.db.setup import get_test_connection
 from cerebro.core.triggers import TRIGGERS
 from cerebro.core.trigger_engine import (
@@ -36,8 +38,8 @@ def _inserir_pendencia(conn, **kw):
         {
             "delegado_para": defaults.get("delegado_para"),
             "prazo": defaults.get("prazo"),
-            "criado_em": defaults.get("criado_em", datetime.now().isoformat()),
-            "atualizado_em": defaults.get("atualizado_em", datetime.now().isoformat()),
+            "criado_em": defaults.get("criado_em", agora().isoformat()),
+            "atualizado_em": defaults.get("atualizado_em", agora().isoformat()),
             "concluido_em": defaults.get("concluido_em"),
             **{k: v for k, v in defaults.items() if k not in ("delegado_para", "prazo", "criado_em", "atualizado_em", "concluido_em")},
         },
@@ -93,13 +95,13 @@ class TestTriggerT05TarefasSemPrazo:
 
 class TestTriggerT08P1P2Paradas:
     def test_nao_dispara_p3(self, conn):
-        antigo = (datetime.now() - timedelta(days=5)).isoformat()
+        antigo = (agora() - timedelta(days=5)).isoformat()
         _inserir_pendencia(conn, prioridade=3, atualizado_em=antigo)
         result = TRIGGERS["T08"].avaliar(conn)
         assert result is None
 
     def test_dispara_p1_parada(self, conn):
-        antigo = (datetime.now() - timedelta(days=4)).isoformat()
+        antigo = (agora() - timedelta(days=4)).isoformat()
         _inserir_pendencia(conn, tarefa="Urgente", prioridade=1, atualizado_em=antigo)
         result = TRIGGERS["T08"].avaliar(conn)
         assert result is not None
@@ -113,7 +115,7 @@ class TestTriggerT06DelegacaoEnvelhecendo:
         assert result is None
 
     def test_dispara_delegacao_velha(self, conn):
-        antigo = (datetime.now() - timedelta(days=6)).isoformat()
+        antigo = (agora() - timedelta(days=6)).isoformat()
         _inserir_pendencia(conn, delegado_para="Pai", atualizado_em=antigo)
         result = TRIGGERS["T06"].avaliar(conn)
         assert result is not None
@@ -122,13 +124,13 @@ class TestTriggerT06DelegacaoEnvelhecendo:
 
 class TestTriggerT10SemanaSemConcluir:
     def test_nao_dispara_com_conclusao_recente(self, conn):
-        ontem = (datetime.now() - timedelta(days=1)).isoformat()
+        ontem = (agora() - timedelta(days=1)).isoformat()
         _inserir_pendencia(conn, status="concluida", concluido_em=ontem)
         result = TRIGGERS["T10"].avaliar(conn)
         assert result is None
 
     def test_dispara_sem_conclusao_5_dias(self, conn):
-        antigo = (datetime.now() - timedelta(days=6)).isoformat()
+        antigo = (agora() - timedelta(days=6)).isoformat()
         _inserir_pendencia(conn, status="concluida", concluido_em=antigo)
         _inserir_pendencia(conn, tarefa="Pendente")  # pendente pra contar
         result = TRIGGERS["T10"].avaliar(conn)
@@ -177,7 +179,7 @@ class TestTriggerEngine:
 
     def test_antispam_max_3(self, conn):
         # Criar dados que disparam vários triggers
-        antigo = (datetime.now() - timedelta(days=10)).isoformat()
+        antigo = (agora() - timedelta(days=10)).isoformat()
         for i in range(20):
             _inserir_pendencia(
                 conn, tarefa=f"Definir algo {i}", projeto="wipr",

@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable
 
+from cerebro.clock import agora
+
 
 @dataclass
 class TriggerDef:
@@ -195,7 +197,7 @@ def _avaliar_nf_sem_pagamento(conn) -> list[dict] | None:
 def _formatar_nf_sem_pagamento(dados: list[dict]) -> str:
     linhas = []
     for d in dados:
-        dias = (datetime.now() - datetime.fromisoformat(d["concluido_em"])).days if d.get("concluido_em") else "?"
+        dias = (agora() - datetime.fromisoformat(d["concluido_em"])).days if d.get("concluido_em") else "?"
         linhas.append(f"[{d['projeto'].upper()}] \"{d['tarefa']}\" — concluída há {dias} dias")
     return (
         "💰 **NF concluída sem pagamento registrado**\n\n"
@@ -206,7 +208,7 @@ def _formatar_nf_sem_pagamento(dados: list[dict]) -> str:
 
 def _avaliar_receita_recorrente_ausente(conn) -> list[dict] | None:
     # Só avalia após dia 10 do mês
-    if datetime.now().day < 10:
+    if agora().day < 10:
         return None
     rows = conn.execute(
         """SELECT l.descricao, l.valor, l.projeto
@@ -312,7 +314,7 @@ def _formatar_gasto_acima_padrao(dados: list[dict]) -> str:
 
 def _avaliar_matheus_sumiu(conn) -> list[dict] | None:
     # Pular fim de semana
-    if datetime.now().weekday() >= 5:
+    if agora().weekday() >= 5:
         return None
     # Verificar evento de obra
     obra = conn.execute(

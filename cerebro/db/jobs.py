@@ -4,6 +4,7 @@ import json
 import uuid
 from datetime import datetime
 
+from cerebro.clock import agora_iso
 from cerebro.db.setup import get_connection
 
 
@@ -84,7 +85,7 @@ def pegar_proximo_job(conn=None) -> dict | None:
     job_id = row["id"]
     conn.execute(
         "UPDATE jobs SET status = 'executando', iniciado_em = ? WHERE id = ?",
-        (datetime.now().isoformat(), job_id),
+        (agora_iso(), job_id),
     )
     conn.commit()
     return get_job(job_id, conn)
@@ -95,7 +96,7 @@ def concluir_job(id: str, resultado: str, custo_tokens: int | None = None, conn=
     conn.execute(
         """UPDATE jobs SET status = 'concluido', resultado = ?, concluido_em = ?, custo_tokens = ?
            WHERE id = ?""",
-        (resultado, datetime.now().isoformat(), custo_tokens, id),
+        (resultado, agora_iso(), custo_tokens, id),
     )
     conn.commit()
     return get_job(id, conn)
@@ -105,7 +106,7 @@ def falhar_job(id: str, erro: str, conn=None) -> dict | None:
     conn = conn or get_connection()
     conn.execute(
         "UPDATE jobs SET status = 'erro', erro = ?, concluido_em = ? WHERE id = ?",
-        (erro, datetime.now().isoformat(), id),
+        (erro, agora_iso(), id),
     )
     conn.commit()
     return get_job(id, conn)

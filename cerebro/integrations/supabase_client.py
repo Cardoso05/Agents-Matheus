@@ -6,6 +6,8 @@ import os
 from datetime import datetime, timedelta
 from functools import lru_cache
 
+from cerebro.clock import agora, hoje
+
 logger = logging.getLogger(__name__)
 
 # Cache do client
@@ -120,7 +122,7 @@ def inserir_transacao(
         return None
 
     if data is None:
-        data = datetime.now().date().isoformat()
+        data = hoje()
 
     category_id = _get_category_id(categoria_cerebro)
     finbot_type = TIPO_MAP.get(tipo, "expense")
@@ -198,7 +200,7 @@ def resumo_mes(mes: str | None = None) -> dict | None:
         return None
 
     if mes is None:
-        mes = datetime.now().strftime("%Y-%m")
+        mes = agora().strftime("%Y-%m")
 
     try:
         transacoes = listar_transacoes(mes=mes, limite=500)
@@ -305,7 +307,7 @@ def dividas_vencendo(dias: int = 7) -> list[dict]:
         return []
 
     try:
-        hoje = datetime.now().date()
+        data_hoje = agora().date()
         dividas = listar_dividas_ativas()
 
         vencendo = []
@@ -313,15 +315,15 @@ def dividas_vencendo(dias: int = 7) -> list[dict]:
             if d.get("due_day"):
                 # Calcular próximo vencimento
                 dia = d["due_day"]
-                prox_venc = hoje.replace(day=min(dia, 28))
-                if prox_venc < hoje:
+                prox_venc = data_hoje.replace(day=min(dia, 28))
+                if prox_venc < data_hoje:
                     # Já passou este mês, considerar próximo
-                    if hoje.month == 12:
-                        prox_venc = prox_venc.replace(year=hoje.year + 1, month=1)
+                    if data_hoje.month == 12:
+                        prox_venc = prox_venc.replace(year=data_hoje.year + 1, month=1)
                     else:
-                        prox_venc = prox_venc.replace(month=hoje.month + 1)
+                        prox_venc = prox_venc.replace(month=data_hoje.month + 1)
 
-                diff = (prox_venc - hoje).days
+                diff = (prox_venc - data_hoje).days
                 if 0 <= diff <= dias:
                     d["_vencimento"] = prox_venc.isoformat()
                     d["_dias_ate"] = diff

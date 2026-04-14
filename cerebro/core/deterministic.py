@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 
+from cerebro.clock import agora, hoje
 from cerebro.core.config import PROJETOS, PRIORIDADE_PROJETO_ORDER
 from cerebro.db.setup import get_connection
 
@@ -86,7 +87,7 @@ def top_n_do_dia(n: int = 3, conn=None) -> str:
 
     sorted_rows = sorted(rows, key=sort_key)
     top = sorted_rows[:n]
-    today = datetime.now().date().isoformat()
+    today = hoje()
 
     lines = [f"🎯 **Top {n} do dia**\n"]
     for i, row in enumerate(top, 1):
@@ -117,7 +118,7 @@ def atrasadas(conn=None) -> str:
         info = PROJETOS.get(row["projeto"], {})
         emoji = info.get("emoji", "⚪")
         nome = info.get("nome", row["projeto"].upper())
-        dias = (datetime.now().date() - datetime.fromisoformat(row["prazo"]).date()).days
+        dias = (agora().date() - datetime.fromisoformat(row["prazo"]).date()).days
         lines.append(f"🚨 #{row['id']} [{emoji} {nome}] {row['tarefa']} — {dias} dia{'s' if dias > 1 else ''} atrasada")
 
     return "\n".join(lines)
@@ -168,7 +169,7 @@ def projetos_parados(dias: int = 5, conn=None) -> str:
 
         if ultima_acao and ultima_acao["ultimo"]:
             ultimo = datetime.fromisoformat(ultima_acao["ultimo"])
-            delta = (datetime.now() - ultimo).days
+            delta = (agora() - ultimo).days
             if delta > dias:
                 info = PROJETOS.get(projeto, {})
                 nome = info.get("nome", projeto.upper())
@@ -204,7 +205,7 @@ def pendencias_projeto(projeto: str, conn=None) -> str:
     if not rows:
         return f"{emoji} **{nome}**: Nenhuma pendência ativa."
 
-    today = datetime.now().date().isoformat()
+    today = hoje()
     lines = [f"{emoji} **{nome}** — {len(rows)} pendência{'s' if len(rows) > 1 else ''}\n"]
 
     status_badge = {"pendente": "", "em_andamento": "🔵", "bloqueada": "🔴"}
@@ -277,7 +278,7 @@ def concluir_tarefa(id: int, conn=None) -> str:
         if foco_enc:
             inicio = datetime.fromisoformat(foco_enc["inicio"])
             pausado = (foco_enc["tempo_pausado_s"] or 0) / 60
-            duracao = int((datetime.now() - inicio).total_seconds() / 60 - pausado)
+            duracao = int((agora() - inicio).total_seconds() / 60 - pausado)
             result += f"\n⏹️ Foco encerrado ({duracao} min)"
 
     # Sugerir próxima do mesmo projeto
@@ -391,7 +392,7 @@ def det_iniciar_foco(id: int, conn=None) -> str:
         f"Tarefa: #{id} {pendencia['tarefa']}\n"
         f"Projeto: {nome}\n"
         f"Tempo estimado: {tempo}\n"
-        f"Iniciado: {datetime.now().strftime('%H:%M')}\n\n"
+        f"Iniciado: {agora().strftime('%H:%M')}\n\n"
         f"Quando terminar:\n"
         f"• 'fiz a {id}' → conclui\n"
         f"• 'travei na {id}' → bloqueia\n"
@@ -411,7 +412,7 @@ def det_encerrar_foco(conn=None) -> str:
     foco = encerrar_foco("concluido", conn)
     inicio = datetime.fromisoformat(foco["inicio"])
     pausado = (foco["tempo_pausado_s"] or 0) / 60
-    duracao_total = int((datetime.now() - inicio).total_seconds() / 60)
+    duracao_total = int((agora() - inicio).total_seconds() / 60)
     duracao_liquida = int(duracao_total - pausado)
 
     return (
@@ -456,7 +457,7 @@ def det_status_foco(conn=None) -> str:
     pendencia = get_pendencia(foco["pendencia_id"], conn)
     tarefa_nome = pendencia["tarefa"] if pendencia else "?"
     inicio = datetime.fromisoformat(foco["inicio"])
-    minutos = int((datetime.now() - inicio).total_seconds() / 60)
+    minutos = int((agora() - inicio).total_seconds() / 60)
     pausado = int((foco["tempo_pausado_s"] or 0) / 60)
     status_str = "⏸️ pausado" if foco["status"] == "pausado" else "🎯 ativo"
 
@@ -475,10 +476,10 @@ def resumo_atividade(dia: str = "hoje", conn=None) -> str:
     """Mostra o que foi feito hoje ou ontem."""
     conn = conn or get_connection()
     if dia == "ontem":
-        data = (datetime.now() - timedelta(days=1)).date().isoformat()
+        data = (agora() - timedelta(days=1)).date().isoformat()
         label = "ontem"
     else:
-        data = datetime.now().date().isoformat()
+        data = hoje()
         label = "hoje"
 
     # Ações do dia agrupadas
@@ -546,7 +547,7 @@ def eventos_semana(conn=None) -> str:
 def resumo_semanal(conn=None) -> str:
     """Criadas vs concluídas na última semana, métricas gerais."""
     conn = conn or get_connection()
-    semana_atras = (datetime.now() - timedelta(days=7)).isoformat()
+    semana_atras = (agora() - timedelta(days=7)).isoformat()
 
     criadas = conn.execute(
         "SELECT COUNT(*) as n FROM pendencias WHERE criado_em >= ?", (semana_atras,)

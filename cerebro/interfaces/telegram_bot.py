@@ -242,10 +242,10 @@ async def cmd_triggers(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def _tempo_relativo(timestamp_str: str) -> str:
     """Converte timestamp ISO em texto relativo (ex: '2 dias')."""
-    from datetime import datetime
+    from cerebro.clock import agora
     try:
         dt = datetime.fromisoformat(timestamp_str)
-        delta = datetime.now() - dt
+        delta = agora() - dt
         if delta.days > 0:
             return f"{delta.days} dia(s)"
         horas = int(delta.total_seconds() / 3600)
@@ -259,7 +259,7 @@ def _tempo_relativo(timestamp_str: str) -> str:
 async def _interceptar_foco(texto: str, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Intercepta mensagens durante foco ativo. Retorna True se interceptou."""
     from cerebro.db.models import foco_ativo, get_pendencia
-    from datetime import datetime
+    from cerebro.clock import agora
 
     foco = foco_ativo()
     if not foco or foco["status"] != "ativo":
@@ -289,7 +289,7 @@ async def _interceptar_foco(texto: str, update: Update, context: ContextTypes.DE
         pendencia = get_pendencia(foco["pendencia_id"])
         tarefa_nome = pendencia["tarefa"][:40] if pendencia else "?"
         inicio = datetime.fromisoformat(foco["inicio"])
-        minutos = int((datetime.now() - inicio).total_seconds() / 60)
+        minutos = int((agora() - inicio).total_seconds() / 60)
         await _safe_reply(
             update.message,
             f"⚠️ **Modo Foco ativo** ({minutos} min)\n"
