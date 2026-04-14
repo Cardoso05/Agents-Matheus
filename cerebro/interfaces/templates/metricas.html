@@ -78,6 +78,29 @@
 {% endif %}
 
 {% if metricas.erros and metricas.erros > 0 %}
-<p class="atrasada">⚠️ {{ metricas.erros }} erro{{ 's' if metricas.erros > 1 else '' }} nos últimos 7 dias.</p>
+<h3 class="atrasada">Erros Recentes (7d)</h3>
+<p class="atrasada">{{ metricas.erros }} erro{{ 's' if metricas.erros > 1 else '' }} nos últimos 7 dias.</p>
+{% if erros_recentes %}
+<table>
+    <thead>
+        <tr>
+            <th>Quando</th>
+            <th>Tipo</th>
+            <th>Função</th>
+            <th>Erro</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for e in erros_recentes %}
+        <tr>
+            <td>{{ e.timestamp }}</td>
+            <td>{{ e.tipo }}</td>
+            <td>{{ e.funcao or '—' }}</td>
+            <td><small class="atrasada">{{ e.erro[:200] }}</small></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
 {% endif %}
 {% endblock %}

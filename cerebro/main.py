@@ -10,14 +10,32 @@ load_dotenv()
 from cerebro.core.classifier import classificar
 from cerebro.core.deterministic import (
     atrasadas,
+    bloquear_tarefa,
+    cancelar_tarefa,
     concluir_tarefa,
     criar_tarefa,
     delegacoes_pendentes,
+    delegar_tarefa_det,
+    det_encerrar_foco,
+    det_iniciar_foco,
+    det_pausar_foco,
+    det_retomar_foco,
+    det_status_foco,
+    eventos_semana,
+    iniciar_tarefa,
     pendencias_projeto,
     projetos_parados,
+    resumo_atividade,
     resumo_semanal,
     status_geral,
     top_n_do_dia,
+)
+from cerebro.finance.deterministic import (
+    registrar_gasto_rapido,
+    registrar_receita_rapida,
+    resumo_financeiro,
+    contas_vencendo,
+    contas_vencidas,
 )
 from cerebro.db.setup import get_connection, init_db
 from cerebro.db.metricas import registrar_metrica, medir_tempo
@@ -34,7 +52,23 @@ DETERMINISTIC_FUNCS = {
     "pendencias_projeto": pendencias_projeto,
     "criar_tarefa": criar_tarefa,
     "concluir_tarefa": concluir_tarefa,
+    "iniciar_tarefa": iniciar_tarefa,
+    "bloquear_tarefa": bloquear_tarefa,
+    "cancelar_tarefa": cancelar_tarefa,
+    "delegar_tarefa_det": delegar_tarefa_det,
+    "det_iniciar_foco": det_iniciar_foco,
+    "det_encerrar_foco": det_encerrar_foco,
+    "det_pausar_foco": det_pausar_foco,
+    "det_retomar_foco": det_retomar_foco,
+    "det_status_foco": det_status_foco,
+    "resumo_atividade": resumo_atividade,
     "resumo_semanal": resumo_semanal,
+    "eventos_semana": eventos_semana,
+    "registrar_gasto": registrar_gasto_rapido,
+    "registrar_receita": registrar_receita_rapida,
+    "resumo_financeiro": resumo_financeiro,
+    "contas_vencendo": contas_vencendo,
+    "contas_vencidas": contas_vencidas,
 }
 
 
@@ -118,6 +152,8 @@ def main():
     parser.add_argument("--init-db", action="store_true", help="Inicializar banco de dados")
     parser.add_argument("--telegram", action="store_true", help="Iniciar bot Telegram")
     parser.add_argument("--process-jobs", action="store_true", help="Processar jobs pendentes")
+    parser.add_argument("--create-job", nargs=2, metavar=("TIPO", "INSTRUCOES"), help="Criar job (tipo instrucoes)")
+    parser.add_argument("--job-projeto", default=None, help="Projeto para --create-job")
     parser.add_argument("--web", action="store_true", help="Iniciar dashboard web")
     parser.add_argument("--web-host", default="127.0.0.1", help="Host do dashboard (default: 127.0.0.1)")
     parser.add_argument("--web-port", type=int, default=8000, help="Porta do dashboard")
@@ -155,6 +191,16 @@ def main():
 
     if args.telegram:
         _run_telegram()
+        return
+
+    if args.create_job:
+        from cerebro.db.jobs import criar_job
+        tipo, instrucoes = args.create_job
+        job = criar_job(tipo=tipo, instrucoes=instrucoes, projeto=args.job_projeto)
+        print(f"✅ Job criado: {job['id']} [{tipo}]")
+        if args.job_projeto:
+            print(f"   Projeto: {args.job_projeto}")
+        print(f"   Instruções: {instrucoes}")
         return
 
     if args.process_jobs:

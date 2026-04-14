@@ -19,11 +19,54 @@
         .ok { color: #27ae60; }
         .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; }
         .badge-pendente { background: #ffeaa7; color: #2d3436; }
+        .badge-em_andamento { background: #74b9ff; color: #fff; }
         .badge-executando { background: #74b9ff; color: #fff; }
-        .badge-concluido { background: #55efc4; color: #2d3436; }
+        .badge-bloqueada { background: #fab1a0; color: #2d3436; }
+        .badge-concluido, .badge-concluida { background: #55efc4; color: #2d3436; }
+        .badge-cancelada { background: #b2bec3; color: #2d3436; }
         .badge-erro { background: #fab1a0; color: #2d3436; }
+        .badge-p1 { background: #e74c3c; color: #fff; }
+        .badge-p2 { background: #e67e22; color: #fff; }
+        .badge-p3 { background: #f1c40f; color: #2d3436; }
+        .badge-p4 { background: #3498db; color: #fff; }
+        .badge-p5 { background: #95a5a6; color: #fff; }
+        .output-md { background: var(--pico-card-background-color); padding: 1rem; border-radius: 8px; font-size: 0.85rem; border: 1px solid var(--pico-muted-border-color); line-height: 1.6; }
+        .output-md p { margin: 0.3rem 0; }
+        .output-md strong { font-weight: 700; }
         pre.output { background: var(--pico-card-background-color); padding: 1rem; border-radius: 8px; white-space: pre-wrap; font-size: 0.85rem; border: 1px solid var(--pico-muted-border-color); }
         table { font-size: 0.9rem; }
+        .btn-concluir { background: #27ae60; color: white; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+        .btn-concluir:hover { background: #219a52; }
+        .btn-excluir { background: #e74c3c; color: white; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+        .btn-excluir:hover { background: #c0392b; }
+        .form-inline { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: end; margin-bottom: 1.5rem; padding: 1rem; background: var(--pico-card-background-color); border-radius: 8px; border: 1px solid var(--pico-muted-border-color); }
+        .form-inline label { font-size: 0.8rem; margin-bottom: 0; }
+        .form-inline input, .form-inline select, .form-inline textarea { margin-bottom: 0; }
+        .form-inline .form-group { display: flex; flex-direction: column; gap: 0.25rem; }
+        .form-inline .form-group-wide { flex: 1; min-width: 200px; }
+        @media (max-width: 768px) {
+            .grid-cards { grid-template-columns: 1fr 1fr; }
+            .form-inline { flex-direction: column; }
+            .form-inline .form-group { width: 100%; }
+            table { display: block; overflow-x: auto; }
+            nav ul { flex-wrap: wrap; gap: 0.25rem; }
+            nav ul li { font-size: 0.85rem; }
+        }
+        @media (max-width: 480px) {
+            .grid-cards { grid-template-columns: 1fr; }
+        }
+        /* Modal de edição */
+        dialog.modal-edit { border: none; border-radius: 12px; padding: 0; max-width: 540px; width: 90%; box-shadow: 0 8px 30px rgba(0,0,0,0.2); }
+        dialog.modal-edit::backdrop { background: rgba(0,0,0,0.5); }
+        dialog.modal-edit .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--pico-muted-border-color); }
+        dialog.modal-edit .modal-header h3 { margin: 0; font-size: 1.1rem; }
+        dialog.modal-edit .modal-body { padding: 1.5rem; }
+        dialog.modal-edit .modal-body label { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem; display: block; }
+        dialog.modal-edit .modal-body input, dialog.modal-edit .modal-body select, dialog.modal-edit .modal-body textarea { margin-bottom: 1rem; }
+        dialog.modal-edit .modal-body textarea { min-height: 80px; resize: vertical; }
+        dialog.modal-edit .modal-footer { display: flex; justify-content: flex-end; gap: 0.5rem; padding: 1rem 1.5rem; border-top: 1px solid var(--pico-muted-border-color); }
+        dialog.modal-edit .btn-close { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--pico-muted-color); padding: 0; line-height: 1; }
+        dialog.modal-edit .btn-close:hover { color: var(--pico-color); }
     </style>
 </head>
 <body>
@@ -35,8 +78,11 @@
             <li><a href="/">Dashboard</a></li>
             <li><a href="/pendencias">Pendências</a></li>
             <li><a href="/calendario">Calendário</a></li>
+            <li><a href="{{ finbot_url or '/financeiro' }}" {% if finbot_url %}target="_blank"{% endif %}>Financeiro</a></li>
             <li><a href="/jobs">Jobs</a></li>
             <li><a href="/metricas">Métricas</a></li>
+            <li><a href="/contexto">Contexto</a></li>
+            <li><a href="/sistema">Sistema</a></li>
         </ul>
     </nav>
     <main class="container">
@@ -45,5 +91,6 @@
     <footer class="container">
         <small>Cérebro v0.2 — Central de Controle</small>
     </footer>
+    <script src="/static/js/app.js"></script>
 </body>
 </html>

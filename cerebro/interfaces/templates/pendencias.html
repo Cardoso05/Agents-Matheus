@@ -3,16 +3,60 @@
 {% block content %}
 <h2>Pendências</h2>
 
+<!-- Formulário criar tarefa -->
+<details>
+    <summary><strong>+ Criar Tarefa</strong></summary>
+    <form class="form-inline" id="form-criar-tarefa">
+        <div class="form-group form-group-wide">
+            <label>Tarefa</label>
+            <input type="text" name="tarefa" required placeholder="Descreva a tarefa...">
+        </div>
+        <div class="form-group">
+            <label>Projeto</label>
+            <select name="projeto" required>
+                {% for slug, info in projetos.items() %}
+                <option value="{{ slug }}">{{ info.emoji }} {{ info.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Prioridade</label>
+            <select name="prioridade">
+                <option value="1">P1 - Urgente</option>
+                <option value="2">P2 - Alta</option>
+                <option value="3" selected>P3 - Normal</option>
+                <option value="4">P4 - Baixa</option>
+                <option value="5">P5 - Eventual</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Prazo</label>
+            <input type="date" name="prazo">
+        </div>
+        <div class="form-group">
+            <label>Responsável</label>
+            <input type="text" name="responsavel" value="matheus">
+        </div>
+        <div class="form-group">
+            <button type="submit">Criar</button>
+        </div>
+    </form>
+</details>
+
+<!-- Filtros -->
 <form method="get" role="group">
-    <select name="projeto" onchange="this.form.submit()">
+    <select name="projeto" data-autosubmit>
         <option value="">Todos os projetos</option>
         {% for slug, info in projetos.items() %}
         <option value="{{ slug }}" {% if projeto_filtro == slug %}selected{% endif %}>{{ info.emoji }} {{ info.nome }}</option>
         {% endfor %}
     </select>
-    <select name="status" onchange="this.form.submit()">
+    <select name="status" data-autosubmit>
         <option value="pendente" {% if status_filtro == 'pendente' %}selected{% endif %}>Pendentes</option>
+        <option value="em_andamento" {% if status_filtro == 'em_andamento' %}selected{% endif %}>Em andamento</option>
+        <option value="bloqueada" {% if status_filtro == 'bloqueada' %}selected{% endif %}>Bloqueadas</option>
         <option value="concluida" {% if status_filtro == 'concluida' %}selected{% endif %}>Concluídas</option>
+        <option value="cancelada" {% if status_filtro == 'cancelada' %}selected{% endif %}>Canceladas</option>
         <option value="" {% if not status_filtro %}selected{% endif %}>Todas</option>
     </select>
 </form>
@@ -27,15 +71,19 @@
             <th>Prazo</th>
             <th>Responsável</th>
             <th>Status</th>
+            <th>Ações</th>
         </tr>
     </thead>
     <tbody>
         {% for p in pendencias %}
         <tr>
             <td>{{ p.id }}</td>
-            <td>{{ p.tarefa }}</td>
+            <td>
+                {{ p.tarefa }}
+                {% if p.notas %}<br><small style="color: var(--pico-muted-color);">{{ p.notas[:80] }}{% if p.notas|length > 80 %}...{% endif %}</small>{% endif %}
+            </td>
             <td>{{ p.projeto | upper }}</td>
-            <td>P{{ p.prioridade }}</td>
+            <td><span class="badge badge-p{{ p.prioridade }}">P{{ p.prioridade }}</span></td>
             <td>
                 {% if p.prazo %}
                     {% if p.atrasada %}<span class="atrasada">{{ p.prazo }}</span>{% else %}{{ p.prazo }}{% endif %}
@@ -43,11 +91,97 @@
             </td>
             <td>{{ p.responsavel }}{% if p.delegado_para %} → {{ p.delegado_para }}{% endif %}</td>
             <td><span class="badge badge-{{ p.status }}">{{ p.status }}</span></td>
+            <td>
+                {% if p.status == 'pendente' %}
+                <button class="btn-concluir" data-iniciar="{{ p.id }}" title="Iniciar">▶</button>
+                <button class="btn-concluir" data-concluir="{{ p.id }}" title="Concluir">✓</button>
+                {% elif p.status == 'em_andamento' %}
+                <button class="btn-concluir" data-concluir="{{ p.id }}" title="Concluir">✓</button>
+                <button class="btn-excluir" data-bloquear="{{ p.id }}" title="Bloquear">⏸</button>
+                {% elif p.status == 'bloqueada' %}
+                <button class="btn-concluir" data-iniciar="{{ p.id }}" title="Retomar">▶</button>
+                {% endif %}
+                {% if p.status not in ('concluida', 'cancelada') %}
+                <button class="btn-concluir" data-abrir-modal="{{ p.id }}" title="Editar" style="background:#3498db;">✎</button>
+                <button class="btn-excluir" data-cancelar-pendencia="{{ p.id }}" title="Cancelar">✕</button>
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
         {% if not pendencias %}
-        <tr><td colspan="7">Nenhuma pendência encontrada.</td></tr>
+        <tr><td colspan="8">Nenhuma pendência encontrada.</td></tr>
         {% endif %}
     </tbody>
 </table>
+
+{% if total_pages > 1 %}
+<nav>
+    <ul>
+        {% if page > 1 %}
+        <li><a href="?page={{ page - 1 }}{% if projeto_filtro %}&projeto={{ projeto_filtro }}{% endif %}&status={{ status_filtro }}">← Anterior</a></li>
+        {% endif %}
+        <li>Página {{ page }} de {{ total_pages }} ({{ total }} pendências)</li>
+        {% if page < total_pages %}
+        <li><a href="?page={{ page + 1 }}{% if projeto_filtro %}&projeto={{ projeto_filtro }}{% endif %}&status={{ status_filtro }}">Próxima →</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Modal de edição -->
+<dialog id="modal-editar" class="modal-edit">
+    <div class="modal-header">
+        <h3>Editar Pendência <span id="modal-edit-id"></span></h3>
+        <button class="btn-close" id="modal-fechar">×</button>
+    </div>
+    <div class="modal-body">
+        <input type="hidden" id="modal-pendencia-id">
+        <label for="modal-tarefa">Tarefa</label>
+        <input type="text" id="modal-tarefa">
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div>
+                <label for="modal-projeto">Projeto</label>
+                <select id="modal-projeto">
+                    {% for slug, info in projetos.items() %}
+                    <option value="{{ slug }}">{{ info.emoji }} {{ info.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="modal-prioridade">Prioridade</label>
+                <select id="modal-prioridade">
+                    <option value="1">P1 - Urgente</option>
+                    <option value="2">P2 - Alta</option>
+                    <option value="3">P3 - Normal</option>
+                    <option value="4">P4 - Baixa</option>
+                    <option value="5">P5 - Eventual</option>
+                </select>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div>
+                <label for="modal-prazo">Prazo</label>
+                <input type="date" id="modal-prazo">
+            </div>
+            <div>
+                <label for="modal-delegado">Delegar para</label>
+                <input type="text" id="modal-delegado" placeholder="Nome da pessoa...">
+            </div>
+        </div>
+
+        <label for="modal-notas">Notas</label>
+        <textarea id="modal-notas" placeholder="Observações, contexto, motivo de bloqueio..."></textarea>
+    </div>
+    <div class="modal-footer">
+        <button class="btn-excluir" id="modal-cancelar">Cancelar</button>
+        <button class="btn-concluir" id="modal-salvar">Salvar</button>
+    </div>
+</dialog>
+
+<!-- Dados das pendências para o modal -->
+<script type="application/json" id="pendencias-data">
+[{% for p in pendencias %}{"id":{{ p.id }},"tarefa":"{{ p.tarefa | e }}","projeto":"{{ p.projeto }}","prioridade":{{ p.prioridade }},"prazo":"{{ p.prazo or '' }}","delegado_para":"{{ p.delegado_para or '' }}","notas":"{{ (p.notas or '') | e }}"}{% if not loop.last %},{% endif %}{% endfor %}]
+</script>
 {% endblock %}

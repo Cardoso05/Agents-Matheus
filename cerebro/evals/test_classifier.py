@@ -108,6 +108,149 @@ class TestClassificador:
 # ── Testes de detecção de projeto ───────────────────────────
 
 
+class TestMensagensReais:
+    """Mensagens reais que o Matheus manda no dia-a-dia."""
+
+    # ── Status geral ───────────────────────────────
+    def test_resumo(self):
+        r = classificar("resumo")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "status_geral"
+
+    def test_como_tao_as_coisas(self):
+        r = classificar("como tão as coisas?")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "status_geral"
+
+    def test_me_atualiza(self):
+        r = classificar("me atualiza")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "status_geral"
+
+    def test_visao_geral(self):
+        r = classificar("visão geral")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "status_geral"
+
+    # ── Atrasadas ──────────────────────────────────
+    def test_algo_atrasado(self):
+        r = classificar("tem algo atrasado?")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "atrasadas"
+
+    def test_tudo_em_dia(self):
+        r = classificar("tá tudo em dia?")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "atrasadas"
+
+    # ── Top do dia ─────────────────────────────────
+    def test_tarefas_de_hoje(self):
+        r = classificar("tarefas de hoje")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "top_n_do_dia"
+
+    def test_por_onde_comeco(self):
+        r = classificar("por onde começo?")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "top_n_do_dia"
+
+    def test_meu_dia(self):
+        r = classificar("meu dia")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "top_n_do_dia"
+
+    def test_o_que_tenho_pra_hoje(self):
+        r = classificar("o que tenho pra hoje?")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "top_n_do_dia"
+
+    # ── Concluir tarefa ────────────────────────────
+    def test_fiz_a_12(self):
+        r = classificar("fiz a 12")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "concluir_tarefa"
+        assert r["args"]["id"] == 12
+
+    def test_pronto_tarefa_7(self):
+        r = classificar("pronto #7")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "concluir_tarefa"
+        assert r["args"]["id"] == 7
+
+    # ── Criar tarefa ───────────────────────────────
+    def test_criar_tarefa_sem_projeto(self):
+        r = classificar("cria tarefa: comprar material")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "criar_tarefa"
+        assert r["args"]["projeto"] == "geral"
+
+    def test_criar_tarefa_com_projeto(self):
+        r = classificar("cria tarefa: fazer GIF pro ERP")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "criar_tarefa"
+        assert r["args"]["projeto"] == "erp"
+
+    # ── Delegações ─────────────────────────────────
+    def test_cobrancas(self):
+        r = classificar("cobranças")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "delegacoes_pendentes"
+
+    def test_sem_resposta(self):
+        r = classificar("sem resposta")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "delegacoes_pendentes"
+
+    # ── Projeto direto ─────────────────────────────
+    def test_apenas_wipr(self):
+        r = classificar("wipr")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "pendencias_projeto"
+        assert r["args"]["projeto"] == "wipr"
+
+    def test_apenas_erp(self):
+        r = classificar("erp")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "pendencias_projeto"
+        assert r["args"]["projeto"] == "erp"
+
+    def test_pendencias_wipr(self):
+        r = classificar("pendências da WIPR")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "pendencias_projeto"
+        assert r["args"]["projeto"] == "wipr"
+
+    # ── Agenda / Calendário ────────────────────────
+    def test_agenda_da_semana(self):
+        r = classificar("agenda da semana")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "eventos_semana"
+
+    def test_calendario(self):
+        r = classificar("calendário")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "eventos_semana"
+
+    # ── Semanal ────────────────────────────────────
+    def test_como_foi_a_semana(self):
+        r = classificar("como foi a semana?")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "resumo_semanal"
+
+    # ── Deve ir pro agente ─────────────────────────
+    def test_manda_msg_pro_victor(self):
+        r = classificar("manda uma mensagem pro Victor sobre os criativos")
+        assert r["handler"] == "agent"
+
+    def test_analisa_campanha(self):
+        r = classificar("analisa a campanha da Gruta")
+        assert r["handler"] == "agent"
+
+    def test_monta_proposta(self):
+        r = classificar("monta a proposta do condomínio 170 câmeras")
+        assert r["handler"] == "agent"
+
+
 class TestDetectarProjeto:
 
     def test_wipr(self):
@@ -133,3 +276,100 @@ class TestDetectarProjeto:
 
     def test_nenhum(self):
         assert detectar_projeto("o que faço agora?") is None
+
+
+class TestNovosStatus:
+    """Testes para classificação de iniciar/bloquear/cancelar tarefa."""
+
+    def test_comecei_a_3(self):
+        r = classificar("comecei a #3")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "iniciar_tarefa"
+        assert r["args"]["id"] == 3
+
+    def test_to_fazendo_5(self):
+        r = classificar("to fazendo a 5")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "iniciar_tarefa"
+        assert r["args"]["id"] == 5
+
+    def test_travei_na_5(self):
+        r = classificar("travei na #5")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "bloquear_tarefa"
+        assert r["args"]["id"] == 5
+
+    def test_bloqueei_a_2(self):
+        r = classificar("bloqueei a 2")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "bloquear_tarefa"
+        assert r["args"]["id"] == 2
+
+    def test_cancelei_a_7(self):
+        r = classificar("cancelei a #7")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "cancelar_tarefa"
+        assert r["args"]["id"] == 7
+
+    def test_cancela_a_4(self):
+        r = classificar("cancela a 4")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "cancelar_tarefa"
+        assert r["args"]["id"] == 4
+
+
+class TestFocoPatterns:
+    """Testes para classificação de modo foco."""
+
+    def test_foco_na_5(self):
+        r = classificar("foco na #5")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "det_iniciar_foco"
+        assert r["args"]["id"] == 5
+
+    def test_focar_na_3(self):
+        r = classificar("focar na tarefa 3")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "det_iniciar_foco"
+        assert r["args"]["id"] == 3
+
+    def test_encerrar_foco(self):
+        r = classificar("encerrar foco")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "det_encerrar_foco"
+
+    def test_pausar_foco(self):
+        r = classificar("pausar foco")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "det_pausar_foco"
+
+    def test_retomar_foco(self):
+        r = classificar("retomar foco")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "det_retomar_foco"
+
+    def test_status_foco(self):
+        r = classificar("status foco")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "det_status_foco"
+
+
+class TestAtividadePatterns:
+    """Testes para classificação de resumo de atividade."""
+
+    def test_o_que_fiz_hoje(self):
+        r = classificar("o que eu fiz hoje?")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "resumo_atividade"
+        assert r["args"]["dia"] == "hoje"
+
+    def test_o_que_fiz_ontem(self):
+        r = classificar("o que fiz ontem?")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "resumo_atividade"
+        assert r["args"]["dia"] == "ontem"
+
+    def test_produtividade(self):
+        r = classificar("produtividade")
+        assert r["handler"] == "deterministic"
+        assert r["func"] == "resumo_atividade"

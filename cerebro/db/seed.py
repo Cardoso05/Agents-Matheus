@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 
+from cerebro.clock import agora
 from cerebro.db.setup import get_connection, init_db
 from cerebro.db import models
 
@@ -11,7 +12,7 @@ def seed_all(conn=None):
     conn = conn or get_connection()
     init_db(conn)
 
-    today = datetime.now().date()
+    today = agora().date()
     yesterday = (today - timedelta(days=1)).isoformat()
     three_days_ago = (today - timedelta(days=3)).isoformat()
     five_days_ago = (today - timedelta(days=5)).isoformat()
@@ -115,4 +116,69 @@ def seed_all(conn=None):
         conn=conn,
     )
 
-    print(f"✅ Seed completo: {conn.execute('SELECT COUNT(*) FROM pendencias').fetchone()[0]} pendências criadas")
+    # ── Jobs de exemplo ──────────────────────────────────
+
+    from cerebro.db.jobs import criar_job
+
+    criar_job(
+        tipo="relatorio",
+        instrucoes="Gere o status geral de todos os projetos com métricas de pendências, atrasadas e delegações.",
+        projeto=None,
+        conn=conn,
+    )
+    criar_job(
+        tipo="auditoria",
+        instrucoes="Verifique pendências atrasadas, delegações sem resposta há mais de 3 dias, e projetos parados.",
+        projeto=None,
+        conn=conn,
+    )
+
+    # ── Categorias financeiras padrão ─────────────────────
+
+    categorias_default = [
+        ("alimentacao", "saida", "🍔", '["ifood","restaurante","almoço","jantar","padaria","mercado","lanche"]'),
+        ("transporte", "saida", "🚗", '["uber","99","combustível","gasolina","estacionamento","pedágio"]'),
+        ("material", "saida", "🔧", '["intelbras","furukawa","cabo","switch","câmera","nvr","rack"]'),
+        ("servico", "saida", "👷", '["mão de obra","diária","frete","terceirizado"]'),
+        ("infra", "saida", "💻", '["hostinger","domínio","servidor","vps","api","anthropic"]'),
+        ("marketing", "saida", "📢", '["meta ads","google ads","facebook","criativos","canva"]'),
+        ("assinatura", "saida", "📦", '["netflix","spotify","total pass","icloud","canva"]'),
+        ("educacao", "saida", "📚", '["unifesp","faculdade","livro","curso"]'),
+        ("saude", "saida", "💊", '["farmácia","academia","médico","dentista","natação"]'),
+        ("projeto_receita", "entrada", "💰", '["setup","mensalidade","retainer"]'),
+        ("servico_receita", "entrada", "🏗️", '["obra","instalação","nf emitida"]'),
+        ("outros", "ambos", "📝", '[]'),
+    ]
+    for nome, tipo, emoji, keywords in categorias_default:
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO categorias (nome, tipo, emoji, keywords) VALUES (?, ?, ?, ?)",
+                (nome, tipo, emoji, keywords),
+            )
+        except Exception:
+            pass
+    conn.commit()
+
+    # ── Lançamentos financeiros de exemplo ──────────────
+
+    from cerebro.db.models_finance import criar_lancamento, criar_compromisso
+    from datetime import timedelta
+
+    criar_lancamento("entrada", 700, "Retainer mensal Gruta Máquinas", "projeto_receita", "gruta", today.isoformat(), conn=conn)
+    criar_lancamento("entrada", 100, "Mensalidade ERP Wordfire", "projeto_receita", "erp", today.isoformat(), conn=conn)
+    criar_lancamento("saida", 47.90, "iFood almoço", "alimentacao", "pessoal", yesterday, conn=conn)
+    criar_lancamento("saida", 52, "Restaurante jantar", "alimentacao", "pessoal", three_days_ago, conn=conn)
+    criar_lancamento("saida", 18, "Uber para escritório", "transporte", "pessoal", yesterday, conn=conn)
+    criar_lancamento("saida", 3487, "Material Intelbras VIBROPAC", "material", "engenharia", five_days_ago, conn=conn)
+    criar_lancamento("saida", 89.90, "Hostinger VPS ERP", "infra", "erp", (today - timedelta(days=10)).isoformat(), conn=conn)
+    criar_lancamento("saida", 150, "Meta Ads Gruta", "marketing", "gruta", (today - timedelta(days=2)).isoformat(), conn=conn)
+
+    # Compromissos
+    criar_compromisso("receber", "VIBROPAC - 1ª parcela", 8000, next_friday, "engenharia", credor="VIBROPAC", conn=conn)
+    criar_compromisso("receber", "Condomínio 170 cam - entrada 40%", 28000, next_week, "engenharia", credor="Condomínio", conn=conn)
+    criar_compromisso("pagar", "Internet escritório DELMAT", 350, next_friday, "engenharia", conn=conn)
+    criar_compromisso("pagar", "Total Pass academia", 99.90, next_friday, "pessoal", conn=conn)
+
+    total_lanc = conn.execute("SELECT COUNT(*) FROM lancamentos").fetchone()[0]
+    total_comp = conn.execute("SELECT COUNT(*) FROM compromissos").fetchone()[0]
+    print(f"✅ Seed completo: {conn.execute('SELECT COUNT(*) FROM pendencias').fetchone()[0]} pendências, 2 jobs, {total_lanc} lançamentos, {total_comp} compromissos")

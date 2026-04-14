@@ -3,6 +3,40 @@
 {% block content %}
 <h2>Jobs de Background</h2>
 
+<!-- Formulário criar job -->
+<details>
+    <summary><strong>+ Criar Job</strong></summary>
+    <form class="form-inline" id="form-criar-job">
+        <div class="form-group">
+            <label>Tipo</label>
+            <select name="tipo" required>
+                <option value="relatorio">Relatório</option>
+                <option value="auditoria">Auditoria</option>
+                <option value="pesquisa">Pesquisa</option>
+                <option value="geracao_conteudo">Geração de Conteúdo</option>
+                <option value="analise_dados">Análise de Dados</option>
+                <option value="revisao_codigo">Revisão de Código</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Projeto</label>
+            <select name="projeto">
+                <option value="">Todos</option>
+                {% for slug, info in projetos.items() %}
+                <option value="{{ slug }}">{{ info.emoji }} {{ info.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group form-group-wide">
+            <label>Instruções</label>
+            <input type="text" name="instrucoes" required placeholder="O que o worker deve fazer...">
+        </div>
+        <div class="form-group">
+            <button type="submit">Criar Job</button>
+        </div>
+    </form>
+</details>
+
 {% if jobs %}
 <table>
     <thead>

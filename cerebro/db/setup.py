@@ -36,6 +36,23 @@ def init_db(conn: sqlite3.Connection | None = None) -> None:
     conn.executescript(SCHEMA)
     conn.commit()
 
+    # Migrations seguras para bancos existentes
+    _run_migrations(conn)
+
+
+def _run_migrations(conn: sqlite3.Connection) -> None:
+    """Migrations aditivas — safe para rodar múltiplas vezes."""
+    migrations = [
+        "ALTER TABLE stakeholders ADD COLUMN telegram_id TEXT",
+        "ALTER TABLE pendencias ADD COLUMN tempo_estimado_min INTEGER",
+    ]
+    for sql in migrations:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Coluna já existe
+
 
 SCHEMA = """
 -- Pendências (tarefas)
@@ -43,9 +60,9 @@ CREATE TABLE IF NOT EXISTS pendencias (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     tarefa          TEXT NOT NULL,
     projeto         TEXT NOT NULL,
-    prioridade      INTEGER DEFAULT 3,
+    prioridade      INTEGER DEFAULT 3 CHECK(prioridade BETWEEN 1 AND 5),
     prazo           DATE,
-    status          TEXT DEFAULT 'pendente',
+    status          TEXT DEFAULT 'pendente' CHECK(status IN ('pendente','em_andamento','bloqueada','concluida','cancelada')),
     responsavel     TEXT DEFAULT 'matheus',
     delegado_para   TEXT,
     notas           TEXT,
@@ -62,7 +79,7 @@ CREATE TABLE IF NOT EXISTS historico (
     acao            TEXT NOT NULL,
     detalhes        TEXT,
     timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (pendencia_id) REFERENCES pendencias(id)
+    FOREIGN KEY (pendencia_id) REFERENCES pendencias(id) ON DELETE SET NULL
 );
 
 -- Fatos permanentes do projeto
@@ -83,6 +100,7 @@ CREATE TABLE IF NOT EXISTS stakeholders (
     papel           TEXT NOT NULL,
     contato         TEXT,
     notas           TEXT,
+    telegram_id     TEXT,
     ativo           BOOLEAN DEFAULT 1
 );
 
@@ -164,5 +182,128 @@ CREATE TABLE IF NOT EXISTS eventos (
     notas           TEXT,
     google_event_id TEXT,
     criado_em       DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ══ Módulo Financeiro ══
+
+-- Lançamentos (entradas e saídas)
+CREATE TABLE IF NOT EXISTS lancamentos (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo            TEXT NOT NULL,
+    valor           REAL NOT NULL,
+    descricao       TEXT NOT NULL,
+    categoria       TEXT NOT NULL,
+    projeto         TEXT DEFAULT 'pessoal',
+    data            DATE NOT NULL,
+    data_vencimento DATE,
+    status          TEXT DEFAULT 'confirmado',
+    recorrente      BOOLEAN DEFAULT 0,
+    recorrencia     TEXT,
+    comprovante_path TEXT,
+    origem          TEXT DEFAULT 'manual',
+    hash_dedup      TEXT,
+    criado_em       DATETIME DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em   DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_lancamentos_projeto ON lancamentos(projeto);
+CREATE INDEX IF NOT EXISTS idx_lancamentos_data ON lancamentos(data);
+CREATE INDEX IF NOT EXISTS idx_lancamentos_categoria ON lancamentos(categoria);
+
+-- Categorias financeiras
+CREATE TABLE IF NOT EXISTS categorias (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome            TEXT NOT NULL UNIQUE,
+    tipo            TEXT NOT NULL,
+    emoji           TEXT,
+    keywords        TEXT,
+    ativo           BOOLEAN DEFAULT 1
+);
+
+-- Compromissos (contas a pagar/receber)
+CREATE TABLE IF NOT EXISTS compromissos (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo            TEXT NOT NULL,
+    descricao       TEXT NOT NULL,
+    valor           REAL NOT NULL,
+    projeto         TEXT DEFAULT 'pessoal',
+    credor          TEXT,
+    vencimento      DATE NOT NULL,
+    status          TEXT DEFAULT 'aberto',
+    parcela_atual   INTEGER,
+    parcela_total   INTEGER,
+    lancamento_id   INTEGER,
+    notas           TEXT,
+    criado_em       DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (lancamento_id) REFERENCES lancamentos(id) ON DELETE SET NULL
+);
+
+-- Regras de categorização automática
+CREATE TABLE IF NOT EXISTS regras_categorizacao (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    pattern         TEXT NOT NULL,
+    categoria       TEXT NOT NULL,
+    projeto         TEXT,
+    prioridade      INTEGER DEFAULT 5,
+    ativo           BOOLEAN DEFAULT 1
+);
+
+-- Orçamento por categoria
+CREATE TABLE IF NOT EXISTS orcamento (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    categoria       TEXT NOT NULL,
+    projeto         TEXT DEFAULT 'pessoal',
+    valor_limite    REAL NOT NULL,
+    mes             TEXT NOT NULL,
+    UNIQUE(categoria, projeto, mes)
+);
+
+-- ══ Triggers Condicionais ══
+
+-- Configuração de triggers (ativo/inativo, cooldown custom)
+CREATE TABLE IF NOT EXISTS trigger_config (
+    id              TEXT PRIMARY KEY,
+    ativo           BOOLEAN DEFAULT 1,
+    cooldown_horas  INTEGER,
+    pausado_ate     DATETIME,
+    criado_em       DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Log de disparos (controla cooldown + histórico)
+CREATE TABLE IF NOT EXISTS trigger_log (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    trigger_id      TEXT NOT NULL,
+    dados           TEXT,
+    notificado      BOOLEAN DEFAULT 1,
+    timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_trigger_log_recent ON trigger_log(trigger_id, timestamp DESC);
+
+-- ══ Modo Foco ══
+
+CREATE TABLE IF NOT EXISTS foco (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    pendencia_id    INTEGER,
+    projeto         TEXT,
+    inicio          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fim             DATETIME,
+    pausado_em      DATETIME,
+    tempo_pausado_s INTEGER DEFAULT 0,
+    status          TEXT DEFAULT 'ativo' CHECK(status IN ('ativo','pausado','concluido','cancelado')),
+    FOREIGN KEY (pendencia_id) REFERENCES pendencias(id) ON DELETE SET NULL
+);
+
+-- ══ Resumo Diário ══
+
+CREATE TABLE IF NOT EXISTS resumo_diario (
+    data                DATE PRIMARY KEY,
+    tarefas_concluidas  TEXT,
+    tarefas_iniciadas   TEXT,
+    tempo_foco_min      INTEGER DEFAULT 0,
+    projetos_trabalhados TEXT,
+    eventos_amanha      TEXT,
+    notas               TEXT,
+    criado_em           DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 """

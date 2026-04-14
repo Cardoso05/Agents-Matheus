@@ -1,0 +1,1 @@
+"""Módulo financeiro do Cérebro."""

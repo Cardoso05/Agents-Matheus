@@ -81,6 +81,21 @@ def custo_periodo(dias: int = 30, conn=None) -> dict:
     }
 
 
+def erros_recentes(dias: int = 7, limite: int = 10, conn=None) -> list[dict]:
+    """Retorna os erros mais recentes."""
+    conn = conn or get_connection()
+    rows = conn.execute(
+        """SELECT timestamp, tipo, funcao, erro
+           FROM metricas
+           WHERE sucesso = 0 AND erro IS NOT NULL
+             AND timestamp >= datetime('now', ?)
+           ORDER BY timestamp DESC
+           LIMIT ?""",
+        (f"-{dias} days", limite),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def metricas_por_projeto(projeto: str, dias: int = 30, conn=None) -> dict:
     """Retorna métricas de um projeto específico."""
     conn = conn or get_connection()

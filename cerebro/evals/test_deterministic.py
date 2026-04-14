@@ -3,6 +3,7 @@
 import pytest
 from datetime import datetime, timedelta
 
+from cerebro.clock import agora
 from cerebro.db.setup import get_test_connection
 from cerebro.db import models
 from cerebro.core import deterministic
@@ -18,7 +19,7 @@ def conn():
 
 def _seed_test_data(conn):
     """Popula banco de teste com dados conhecidos."""
-    today = datetime.now().date()
+    today = agora().date()
     yesterday = (today - timedelta(days=1)).isoformat()
     last_week = (today - timedelta(days=7)).isoformat()
     next_week = (today + timedelta(days=7)).isoformat()
@@ -152,6 +153,129 @@ class TestConcluirTarefa:
         assert "Próxima sugerida" in result
 
 
+class TestDeletarPendencia:
+    """Deletar pendências com dependências no histórico."""
+
+    def test_delete_com_historico(self, conn):
+        """Pendência concluída tem historico — delete não deve falhar."""
+        # Concluir cria entrada no historico
+        models.concluir_pendencia(1, conn=conn)
+        # Re-criar pra ter uma pendência com historico
+        p = models.criar_pendencia("teste delete", "wipr", conn=conn)
+        models.atualizar_pendencia(p["id"], notas="atualizado", conn=conn)
+        result = models.deletar_pendencia(p["id"], conn=conn)
+        assert result is True
+        assert models.get_pendencia(p["id"], conn=conn) is None
+
+    def test_delete_delegada_com_historico(self, conn):
+        """Pendência delegada tem historico — delete não deve falhar."""
+        p = models.criar_pendencia("teste delegação", "wipr", conn=conn)
+        models.delegar_tarefa(p["id"], "Victor", conn=conn)
+        result = models.deletar_pendencia(p["id"], conn=conn)
+        assert result is True
+
+    def test_delete_inexistente(self, conn):
+        result = models.deletar_pendencia(999, conn=conn)
+        assert result is False
+
+
+class TestIniciarTarefa:
+
+    def test_inicia_existente(self, conn):
+        result = deterministic.iniciar_tarefa(1, conn=conn)
+        assert "🔵" in result
+        assert "iniciada" in result
+
+    def test_tarefa_inexistente(self, conn):
+        result = deterministic.iniciar_tarefa(999, conn=conn)
+        assert "❌" in result
+
+
+class TestBloquearTarefa:
+
+    def test_bloqueia_existente(self, conn):
+        result = deterministic.bloquear_tarefa(2, conn=conn)
+        assert "🔴" in result
+        assert "bloqueada" in result
+
+    def test_com_motivo(self, conn):
+        result = deterministic.bloquear_tarefa(2, motivo="Aguardando resposta", conn=conn)
+        assert "Aguardando resposta" in result
+
+    def test_tarefa_inexistente(self, conn):
+        result = deterministic.bloquear_tarefa(999, conn=conn)
+        assert "❌" in result
+
+
+class TestCancelarTarefa:
+
+    def test_cancela_existente(self, conn):
+        result = deterministic.cancelar_tarefa(3, conn=conn)
+        assert "🚫" in result
+        assert "cancelada" in result
+
+    def test_tarefa_inexistente(self, conn):
+        result = deterministic.cancelar_tarefa(999, conn=conn)
+        assert "❌" in result
+
+
+class TestValidacao:
+
+    def test_prioridade_invalida_criar(self, conn):
+        with pytest.raises(ValueError, match="Prioridade inválida"):
+            models.criar_pendencia("teste", "wipr", prioridade=0, conn=conn)
+
+    def test_prioridade_invalida_alta(self, conn):
+        with pytest.raises(ValueError, match="Prioridade inválida"):
+            models.criar_pendencia("teste", "wipr", prioridade=6, conn=conn)
+
+    def test_status_invalido_atualizar(self, conn):
+        with pytest.raises(ValueError, match="Status inválido"):
+            models.atualizar_pendencia(1, status="foo", conn=conn)
+
+    def test_status_valido_atualizar(self, conn):
+        result = models.atualizar_pendencia(1, status="em_andamento", conn=conn)
+        assert result["status"] == "em_andamento"
+
+
+class TestPaginacao:
+
+    def test_com_limite(self, conn):
+        result = models.listar_pendencias(limite=2, conn=conn)
+        assert len(result) == 2
+
+    def test_com_offset(self, conn):
+        all_items = models.listar_pendencias(conn=conn)
+        page2 = models.listar_pendencias(limite=2, offset=2, conn=conn)
+        assert len(page2) <= 2
+        if len(all_items) > 2:
+            assert page2[0]["id"] != all_items[0]["id"]
+
+    def test_sem_limite_retorna_tudo(self, conn):
+        result = models.listar_pendencias(conn=conn)
+        assert len(result) >= 7  # seed cria 7 pendências pendentes
+
+    def test_contar_pendencias(self, conn):
+        total = models.contar_pendencias(conn=conn)
+        all_items = models.listar_pendencias(conn=conn)
+        assert total == len(all_items)
+
+
+class TestOrdenacaoNulos:
+
+    def test_nulo_vai_ao_final_dentro_da_prioridade(self, conn):
+        # Criar tarefa P1 sem prazo (seed já tem P1 com prazo=yesterday)
+        models.criar_pendencia("sem prazo p1", "wipr", prioridade=1, conn=conn)
+        result = models.listar_pendencias(projeto="wipr", status="pendente", conn=conn)
+        # Dentro da mesma prioridade, nulo deve vir depois
+        p1_items = [p for p in result if p["prioridade"] == 1]
+        assert len(p1_items) >= 2
+        # O último P1 deve ser o sem prazo
+        assert p1_items[-1]["prazo"] is None
+        # O primeiro P1 deve ter prazo
+        assert p1_items[0]["prazo"] is not None
+
+
 class TestResumoSemanal:
 
     def test_retorna_metricas(self, conn):
@@ -159,3 +283,78 @@ class TestResumoSemanal:
         assert "Review Semanal" in result
         assert "Criadas" in result
         assert "Concluídas" in result
+
+
+class TestFocoMode:
+
+    def test_iniciar_foco(self, conn):
+        result = deterministic.det_iniciar_foco(1, conn=conn)
+        assert "Modo Foco ativado" in result
+        assert "#1" in result
+
+    def test_foco_duplicado(self, conn):
+        deterministic.det_iniciar_foco(1, conn=conn)
+        result = deterministic.det_iniciar_foco(2, conn=conn)
+        assert "Já existe foco ativo" in result
+
+    def test_foco_inexistente(self, conn):
+        result = deterministic.det_iniciar_foco(999, conn=conn)
+        assert "❌" in result
+
+    def test_pausar_foco(self, conn):
+        deterministic.det_iniciar_foco(1, conn=conn)
+        result = deterministic.det_pausar_foco(conn=conn)
+        assert "pausado" in result.lower()
+
+    def test_retomar_foco(self, conn):
+        deterministic.det_iniciar_foco(1, conn=conn)
+        deterministic.det_pausar_foco(conn=conn)
+        result = deterministic.det_retomar_foco(conn=conn)
+        assert "retomado" in result.lower()
+
+    def test_encerrar_foco(self, conn):
+        deterministic.det_iniciar_foco(1, conn=conn)
+        result = deterministic.det_encerrar_foco(conn=conn)
+        assert "encerrado" in result.lower()
+
+    def test_encerrar_sem_foco(self, conn):
+        result = deterministic.det_encerrar_foco(conn=conn)
+        assert "❌" in result
+
+    def test_status_foco(self, conn):
+        deterministic.det_iniciar_foco(1, conn=conn)
+        result = deterministic.det_status_foco(conn=conn)
+        assert "Foco" in result
+        assert "#1" in result
+
+
+class TestResumoAtividade:
+
+    def test_hoje_com_dados(self, conn):
+        # Seed já conclui #8 "hoje"
+        result = deterministic.resumo_atividade("hoje", conn=conn)
+        assert "Concluídas" in result or "Nenhuma" in result
+        assert "hoje" in result.lower()
+
+    def test_ontem(self, conn):
+        result = deterministic.resumo_atividade("ontem", conn=conn)
+        assert "ontem" in result.lower()
+
+
+class TestEstimativaTempo:
+
+    def test_keyword_conhecida(self, conn):
+        result = models.estimar_tempo("mandar mensagem pro pai")
+        assert result == 2
+
+    def test_keyword_reuniao(self, conn):
+        result = models.estimar_tempo("reunião com Victor")
+        assert result == 60
+
+    def test_sem_keyword(self, conn):
+        result = models.estimar_tempo("algo genérico")
+        assert result is None
+
+    def test_auto_estimativa_criar_tarefa(self, conn):
+        result = deterministic.criar_tarefa("mandar msg pro pai", "wipr", conn=conn)
+        assert "~2 min" in result

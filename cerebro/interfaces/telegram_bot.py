@@ -12,17 +12,35 @@ from telegram.ext import (
     filters,
 )
 
-from cerebro.core.classifier import classificar
+from cerebro.core.classifier import classificar, detectar_projeto
 from cerebro.core.deterministic import (
     atrasadas,
+    bloquear_tarefa,
+    cancelar_tarefa,
     concluir_tarefa,
     criar_tarefa,
     delegacoes_pendentes,
+    delegar_tarefa_det,
+    det_encerrar_foco,
+    det_iniciar_foco,
+    det_pausar_foco,
+    det_retomar_foco,
+    det_status_foco,
+    eventos_semana,
+    iniciar_tarefa,
     pendencias_projeto,
     projetos_parados,
+    resumo_atividade,
     resumo_semanal,
     status_geral,
     top_n_do_dia,
+)
+from cerebro.finance.deterministic import (
+    registrar_gasto_rapido,
+    registrar_receita_rapida,
+    resumo_financeiro,
+    contas_vencendo,
+    contas_vencidas,
 )
 from cerebro.db.setup import init_db
 
@@ -41,7 +59,7 @@ def _load_authorized_users():
             AUTHORIZED_USERS.add(int(uid))
 
 
-# Mapa de funções determinísticas
+# Mapa de funções determinísticas (deve ser idêntico ao main.py)
 DETERMINISTIC_FUNCS = {
     "status_geral": status_geral,
     "top_n_do_dia": top_n_do_dia,
@@ -51,7 +69,23 @@ DETERMINISTIC_FUNCS = {
     "pendencias_projeto": pendencias_projeto,
     "criar_tarefa": criar_tarefa,
     "concluir_tarefa": concluir_tarefa,
+    "iniciar_tarefa": iniciar_tarefa,
+    "bloquear_tarefa": bloquear_tarefa,
+    "cancelar_tarefa": cancelar_tarefa,
+    "delegar_tarefa_det": delegar_tarefa_det,
+    "det_iniciar_foco": det_iniciar_foco,
+    "det_encerrar_foco": det_encerrar_foco,
+    "det_pausar_foco": det_pausar_foco,
+    "det_retomar_foco": det_retomar_foco,
+    "det_status_foco": det_status_foco,
+    "resumo_atividade": resumo_atividade,
     "resumo_semanal": resumo_semanal,
+    "eventos_semana": eventos_semana,
+    "registrar_gasto": registrar_gasto_rapido,
+    "registrar_receita": registrar_receita_rapida,
+    "resumo_financeiro": resumo_financeiro,
+    "contas_vencendo": contas_vencendo,
+    "contas_vencidas": contas_vencidas,
 }
 
 
@@ -180,6 +214,94 @@ async def cmd_semanal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _safe_reply(update.message, resumo_semanal())
 
 
+async def cmd_triggers(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler do /triggers — mostra status dos triggers condicionais."""
+    if not _is_authorized(update.effective_user.id):
+        return
+    from cerebro.core.trigger_engine import listar_status_triggers
+    from cerebro.db.setup import get_connection
+
+    status = listar_status_triggers(get_connection())
+    emoji_prio = {"alta": "🔴", "media": "🟡", "baixa": "🟢"}
+
+    linhas = ["🔔 **Triggers Condicionais**\n"]
+    for s in status:
+        prio = emoji_prio.get(s["prioridade"], "⚪")
+        if not s["ativo"]:
+            estado = "❌ desativado"
+        elif s.get("pausado_ate"):
+            estado = f"⏸ pausado até {s['pausado_ate'][:10]}"
+        else:
+            estado = "✅ ativo"
+
+        ultimo = f"há {_tempo_relativo(s['ultimo_disparo'])}" if s["ultimo_disparo"] else "nunca"
+        linhas.append(f"{prio} `{s['id']}` {s['nome']} — {estado} — último: {ultimo}")
+
+    await _safe_reply(update.message, "\n".join(linhas))
+
+
+def _tempo_relativo(timestamp_str: str) -> str:
+    """Converte timestamp ISO em texto relativo (ex: '2 dias')."""
+    from cerebro.clock import agora
+    try:
+        dt = datetime.fromisoformat(timestamp_str)
+        delta = agora() - dt
+        if delta.days > 0:
+            return f"{delta.days} dia(s)"
+        horas = int(delta.total_seconds() / 3600)
+        if horas > 0:
+            return f"{horas}h"
+        return f"{int(delta.total_seconds() / 60)} min"
+    except (ValueError, TypeError):
+        return "?"
+
+
+async def _interceptar_foco(texto: str, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Intercepta mensagens durante foco ativo. Retorna True se interceptou."""
+    from cerebro.db.models import foco_ativo, get_pendencia
+    from cerebro.clock import agora
+
+    foco = foco_ativo()
+    if not foco or foco["status"] != "ativo":
+        return False
+
+    texto_lower = texto.lower()
+
+    # Sempre deixa passar comandos de foco
+    foco_cmds = [
+        "encerrar foco", "parar foco", "pausar foco", "sai do foco",
+        "saí do foco", "fim do foco", "status foco", "retomar foco",
+    ]
+    if any(cmd in texto_lower for cmd in foco_cmds):
+        return False
+
+    # Sempre deixa passar conclusão/bloqueio da tarefa em foco
+    result = classificar(texto)
+    task_id = result.get("args", {}).get("id")
+    if task_id == foco["pendencia_id"] and result.get("func") in (
+        "concluir_tarefa", "bloquear_tarefa", "iniciar_tarefa",
+    ):
+        return False
+
+    # Detectar troca de projeto
+    projeto_msg = detectar_projeto(texto)
+    if projeto_msg and projeto_msg != foco.get("projeto"):
+        pendencia = get_pendencia(foco["pendencia_id"])
+        tarefa_nome = pendencia["tarefa"][:40] if pendencia else "?"
+        inicio = datetime.fromisoformat(foco["inicio"])
+        minutos = int((agora() - inicio).total_seconds() / 60)
+        await _safe_reply(
+            update.message,
+            f"⚠️ **Modo Foco ativo** ({minutos} min)\n"
+            f"Trabalhando em: #{foco['pendencia_id']} {tarefa_nome} [{foco['projeto'].upper()}]\n\n"
+            f"Você está mudando para {projeto_msg.upper()}.\n"
+            f"Quer continuar? Diz 'encerrar foco' antes ou responda novamente."
+        )
+        return True
+
+    return False
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler de mensagens de texto genéricas."""
     if not _is_authorized(update.effective_user.id):
@@ -188,6 +310,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     texto = update.message.text
     if not texto:
+        return
+
+    # Interceptor de foco — avisa sobre troca de projeto
+    interceptado = await _interceptar_foco(texto, update, context)
+    if interceptado:
         return
 
     # Indica que está processando
@@ -241,6 +368,7 @@ def create_app() -> Application:
     app.add_handler(CommandHandler("top3", cmd_top3))
     app.add_handler(CommandHandler("atrasadas", cmd_atrasadas))
     app.add_handler(CommandHandler("semanal", cmd_semanal))
+    app.add_handler(CommandHandler("triggers", cmd_triggers))
 
     # Mensagens de texto
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
