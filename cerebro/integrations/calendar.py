@@ -5,6 +5,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 
+from cerebro.clock import agora, hoje, FUSO
 from cerebro.db.setup import get_connection
 
 logger = logging.getLogger(__name__)
@@ -103,15 +104,15 @@ def listar_eventos(
 def eventos_do_dia(data: str | None = None, conn=None) -> list[dict]:
     """Retorna eventos de um dia específico (default: hoje)."""
     if data is None:
-        data = datetime.now().date().isoformat()
+        data = hoje()
     return listar_eventos(data_inicio=data, data_fim=data, conn=conn)
 
 
 def eventos_da_semana(conn=None) -> list[dict]:
     """Retorna eventos da semana atual."""
-    hoje = datetime.now().date()
+    data_hoje = agora().date()
     # Início da semana (segunda)
-    inicio = hoje - timedelta(days=hoje.weekday())
+    inicio = data_hoje - timedelta(days=data_hoje.weekday())
     fim = inicio + timedelta(days=6)
     return listar_eventos(
         data_inicio=inicio.isoformat(),
@@ -192,7 +193,7 @@ def _build_google_body(evento: dict) -> dict:
     data = evento["data"]
     duracao = evento.get("duracao_minutos", 60)
 
-    start_dt = datetime.fromisoformat(f"{data}T{hora}:00")
+    start_dt = datetime.fromisoformat(f"{data}T{hora}:00").replace(tzinfo=FUSO)
     end_dt = start_dt + timedelta(minutes=duracao)
 
     body = {

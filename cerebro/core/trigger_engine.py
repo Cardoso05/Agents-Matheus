@@ -4,6 +4,7 @@ import json
 import logging
 from datetime import datetime
 
+from cerebro.clock import agora
 from cerebro.core.triggers import TRIGGERS, TriggerDef
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,7 @@ class TriggerEngine:
         if row["pausado_ate"]:
             try:
                 pausado_ate = datetime.fromisoformat(row["pausado_ate"])
-                if datetime.now() < pausado_ate:
+                if agora() < pausado_ate:
                     return False
             except ValueError:
                 pass
@@ -79,7 +80,7 @@ class TriggerEngine:
 
     def _em_silencio(self, trigger: TriggerDef) -> bool:
         """Verifica se estamos no horário de silêncio (ex: 22h-8h)."""
-        hora = datetime.now().hour
+        hora = agora().hour
         inicio = trigger.silencio_inicio
         fim = trigger.silencio_fim
 
@@ -108,7 +109,7 @@ class TriggerEngine:
 
         try:
             ultimo = datetime.fromisoformat(row["timestamp"])
-            horas_desde = (datetime.now() - ultimo).total_seconds() / 3600
+            horas_desde = (agora() - ultimo).total_seconds() / 3600
             return horas_desde < cooldown
         except (ValueError, TypeError):
             return False
@@ -181,7 +182,7 @@ def pausar_trigger(conn, trigger_id: str, dias: int = 7) -> bool:
     if trigger_id not in TRIGGERS:
         return False
     from datetime import timedelta
-    pausado_ate = (datetime.now() + timedelta(days=dias)).isoformat()
+    pausado_ate = (agora() + timedelta(days=dias)).isoformat()
     conn.execute(
         """INSERT INTO trigger_config (id, pausado_ate) VALUES (?, ?)
            ON CONFLICT(id) DO UPDATE SET pausado_ate = ?""",

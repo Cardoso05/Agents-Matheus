@@ -3,6 +3,7 @@
 import hashlib
 from datetime import datetime
 
+from cerebro.clock import hoje
 from cerebro.db.setup import get_connection
 
 
@@ -43,7 +44,7 @@ def criar_lancamento(
     """Cria um lançamento financeiro."""
     conn = conn or get_connection()
     if data is None:
-        data = datetime.now().date().isoformat()
+        data = hoje()
 
     hash_dedup = _gerar_hash(data, valor, descricao)
 

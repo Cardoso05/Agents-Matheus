@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from cerebro.clock import agora, agora_iso, hoje
 from cerebro.db.setup import get_connection
 
 
@@ -61,7 +62,7 @@ def iniciar_pendencia(id: int, conn=None) -> dict | None:
     pendencia = get_pendencia(id, conn)
     if not pendencia:
         return None
-    now = datetime.now().isoformat()
+    now = agora_iso()
     conn.execute(
         "UPDATE pendencias SET status = 'em_andamento', atualizado_em = ? WHERE id = ?",
         (now, id),
@@ -81,7 +82,7 @@ def bloquear_pendencia(id: int, motivo: str | None = None, conn=None) -> dict | 
     pendencia = get_pendencia(id, conn)
     if not pendencia:
         return None
-    now = datetime.now().isoformat()
+    now = agora_iso()
     # Append motivo às notas se fornecido
     notas = pendencia.get("notas") or ""
     if motivo:
@@ -105,7 +106,7 @@ def cancelar_pendencia(id: int, conn=None) -> dict | None:
     pendencia = get_pendencia(id, conn)
     if not pendencia:
         return None
-    now = datetime.now().isoformat()
+    now = agora_iso()
     conn.execute(
         "UPDATE pendencias SET status = 'cancelada', atualizado_em = ? WHERE id = ?",
         (now, id),
@@ -124,7 +125,7 @@ def concluir_pendencia(id: int, conn=None) -> dict | None:
     pendencia = get_pendencia(id, conn)
     if not pendencia:
         return None
-    now = datetime.now().isoformat()
+    now = agora_iso()
     conn.execute(
         """UPDATE pendencias SET status = 'concluida', concluido_em = ?, atualizado_em = ?
            WHERE id = ?""",
@@ -155,7 +156,7 @@ def atualizar_pendencia(id: int, conn=None, **campos) -> dict | None:
     if "prioridade" in updates and updates["prioridade"] not in VALID_PRIORIDADES:
         raise ValueError(f"Prioridade inválida: {updates['prioridade']}. Use 1-5.")
 
-    updates["atualizado_em"] = datetime.now().isoformat()
+    updates["atualizado_em"] = agora_iso()
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     values = list(updates.values()) + [id]
     conn.execute(f"UPDATE pendencias SET {set_clause} WHERE id = ?", values)
@@ -221,7 +222,7 @@ def listar_pendencias(
     result = _rows_to_list(rows)
 
     # Marcar atrasadas
-    today = datetime.now().date().isoformat()
+    today = hoje()
     for p in result:
         p["atrasada"] = bool(p.get("prazo") and p["prazo"] < today and p["status"] in ("pendente", "em_andamento"))
 
@@ -245,7 +246,7 @@ def delegar_tarefa(id: int, pessoa: str, conn=None) -> dict | None:
     pendencia = get_pendencia(id, conn)
     if not pendencia:
         return None
-    now = datetime.now().isoformat()
+    now = agora_iso()
     conn.execute(
         "UPDATE pendencias SET delegado_para = ?, atualizado_em = ? WHERE id = ?",
         (pessoa, now, id),
@@ -410,7 +411,7 @@ def iniciar_foco(pendencia_id: int, projeto: str, conn=None) -> dict:
     ativo = foco_ativo(conn)
     if ativo:
         raise ValueError(f"Já existe foco ativo na tarefa #{ativo['pendencia_id']}")
-    now = datetime.now().isoformat()
+    now = agora_iso()
     cursor = conn.execute(
         "INSERT INTO foco (pendencia_id, projeto, inicio) VALUES (?, ?, ?)",
         (pendencia_id, projeto, now),
@@ -425,7 +426,7 @@ def pausar_foco(conn=None) -> dict | None:
     ativo = foco_ativo(conn)
     if not ativo or ativo["status"] != "ativo":
         return None
-    now = datetime.now().isoformat()
+    now = agora_iso()
     conn.execute(
         "UPDATE foco SET status = 'pausado', pausado_em = ? WHERE id = ?",
         (now, ativo["id"]),
@@ -441,7 +442,7 @@ def retomar_foco(conn=None) -> dict | None:
     if not ativo or ativo["status"] != "pausado":
         return None
     pausado_em = datetime.fromisoformat(ativo["pausado_em"])
-    segundos_pausa = int((datetime.now() - pausado_em).total_seconds())
+    segundos_pausa = int((agora() - pausado_em).total_seconds())
     novo_total = (ativo["tempo_pausado_s"] or 0) + segundos_pausa
     conn.execute(
         "UPDATE foco SET status = 'ativo', pausado_em = NULL, tempo_pausado_s = ? WHERE id = ?",
@@ -457,7 +458,7 @@ def encerrar_foco(resultado: str = "concluido", conn=None) -> dict | None:
     ativo = foco_ativo(conn)
     if not ativo:
         return None
-    now = datetime.now()
+    now = agora()
     # Se estava pausado, acumular tempo de pausa restante
     tempo_pausado = ativo["tempo_pausado_s"] or 0
     if ativo["status"] == "pausado" and ativo["pausado_em"]:

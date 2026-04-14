@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 
+from cerebro.clock import agora
 from cerebro.db.setup import get_connection, init_db
 from cerebro.db import models
 
@@ -11,7 +12,7 @@ def seed_all(conn=None):
     conn = conn or get_connection()
     init_db(conn)
 
-    today = datetime.now().date()
+    today = agora().date()
     yesterday = (today - timedelta(days=1)).isoformat()
     three_days_ago = (today - timedelta(days=3)).isoformat()
     five_days_ago = (today - timedelta(days=5)).isoformat()

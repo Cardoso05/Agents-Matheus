@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from cerebro.clock import agora, hoje
+
 from cerebro.core.deterministic import (
     atrasadas,
     delegacoes_pendentes,
@@ -66,15 +68,15 @@ async def briefing_matinal():
     foco = foco_ativo(conn)
     if foco:
         inicio = datetime.fromisoformat(foco["inicio"])
-        horas = (datetime.now() - inicio).total_seconds() / 3600
-        if horas > 4 or inicio.date() < datetime.now().date():
+        horas = (agora() - inicio).total_seconds() / 3600
+        if horas > 4 or inicio.date() < agora().date():
             encerrar_foco("cancelado", conn)
             logger.info(f"Foco #{foco['id']} auto-encerrado (abandonado há {horas:.0f}h)")
 
     partes = ["☀️ **Bom dia, Matheus!**\n"]
 
     # 1. Contexto de ontem (resumo_diario)
-    ontem = (datetime.now() - timedelta(days=1)).date().isoformat()
+    ontem = (agora() - timedelta(days=1)).date().isoformat()
     resumo = get_resumo_diario(ontem)
     if resumo:
         partes.append("📍 **Ontem:**")
@@ -290,14 +292,14 @@ async def resumo_diario_noturno():
     from cerebro.db.setup import get_connection
     from cerebro.db.models import salvar_resumo_diario
     conn = get_connection()
-    hoje = datetime.now().date().isoformat()
+    data_hoje = hoje()
 
     # Concluídas
     concluidas = conn.execute(
         """SELECT p.id, p.tarefa FROM pendencias p
            JOIN historico h ON h.pendencia_id = p.id
            WHERE h.acao = 'concluida' AND date(h.timestamp) = ?
-           GROUP BY p.id""", (hoje,)
+           GROUP BY p.id""", (data_hoje,)
     ).fetchall()
     txt_concluidas = ", ".join(f"#{r['id']} {r['tarefa'][:30]}" for r in concluidas) if concluidas else None
 
@@ -306,7 +308,7 @@ async def resumo_diario_noturno():
         """SELECT p.id, p.tarefa FROM pendencias p
            JOIN historico h ON h.pendencia_id = p.id
            WHERE h.acao = 'iniciada' AND date(h.timestamp) = ?
-           GROUP BY p.id""", (hoje,)
+           GROUP BY p.id""", (data_hoje,)
     ).fetchall()
     txt_iniciadas = ", ".join(f"#{r['id']} {r['tarefa'][:30]}" for r in iniciadas) if iniciadas else None
 
@@ -316,24 +318,24 @@ async def resumo_diario_noturno():
             CASE WHEN fim IS NOT NULL THEN
                 (julianday(fim) - julianday(inicio)) * 1440 - tempo_pausado_s / 60.0
             ELSE 0 END
-        ), 0) as minutos FROM foco WHERE date(inicio) = ?""", (hoje,)
+        ), 0) as minutos FROM foco WHERE date(inicio) = ?""", (data_hoje,)
     ).fetchone()
 
     # Projetos trabalhados
     projetos = conn.execute(
-        "SELECT DISTINCT projeto FROM historico WHERE date(timestamp) = ?", (hoje,)
+        "SELECT DISTINCT projeto FROM historico WHERE date(timestamp) = ?", (data_hoje,)
     ).fetchall()
     txt_projetos = json.dumps([r["projeto"] for r in projetos]) if projetos else None
 
     # Eventos amanhã
-    amanha = (datetime.now() + timedelta(days=1)).date().isoformat()
+    amanha = (agora() + timedelta(days=1)).date().isoformat()
     eventos = conn.execute(
         "SELECT titulo, hora FROM eventos WHERE data = ? ORDER BY hora", (amanha,)
     ).fetchall()
     txt_eventos = ", ".join(f"{e['titulo']} {e['hora'] or ''}" for e in eventos) if eventos else None
 
     salvar_resumo_diario(
-        data=hoje,
+        data=data_hoje,
         tarefas_concluidas=txt_concluidas,
         tarefas_iniciadas=txt_iniciadas,
         tempo_foco_min=int(foco["minutos"]) if foco else 0,
@@ -341,7 +343,7 @@ async def resumo_diario_noturno():
         eventos_amanha=txt_eventos,
         conn=conn,
     )
-    logger.info(f"Resumo diário salvo para {hoje}")
+    logger.info(f"Resumo diário salvo para {data_hoje}")
 
 
 async def pre_faculdade():
@@ -472,7 +474,8 @@ async def processar_fila_jobs():
 
 def criar_scheduler() -> AsyncIOScheduler:
     """Cria e configura o scheduler com todos os jobs."""
-    scheduler = AsyncIOScheduler()
+    from cerebro.clock import FUSO
+    scheduler = AsyncIOScheduler(timezone=FUSO)
 
     # Determinísticos (sem LLM)
     scheduler.add_job(briefing_matinal, "cron", hour=8, id="briefing_matinal")

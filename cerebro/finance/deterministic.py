@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 
+from cerebro.clock import agora
 from cerebro.core.config import PROJETOS
 from cerebro.db.setup import get_connection
 
@@ -17,7 +18,7 @@ def resumo_financeiro(mes: str | None = None, projeto: str | None = None, conn=N
         pass  # Fallback pro SQLite
     conn = conn or get_connection()
     if mes is None:
-        mes = datetime.now().strftime("%Y-%m")
+        mes = agora().strftime("%Y-%m")
 
     params_base = [mes]
     proj_filter = ""
@@ -88,7 +89,7 @@ def gastos_por_categoria(mes: str | None = None, projeto: str | None = None, con
     """Ranking de categorias de saída mais caras."""
     conn = conn or get_connection()
     if mes is None:
-        mes = datetime.now().strftime("%Y-%m")
+        mes = agora().strftime("%Y-%m")
 
     params = [mes]
     proj_filter = ""
@@ -164,7 +165,7 @@ def contas_vencidas(conn=None) -> str:
     total = sum(r["valor"] for r in rows)
     lines = [f"🚨 **{len(rows)} conta{'s' if len(rows) > 1 else ''} vencida{'s' if len(rows) > 1 else ''}** (Total: R${total:,.2f})\n"]
     for r in rows:
-        dias_atraso = (datetime.now().date() - datetime.fromisoformat(r["vencimento"]).date()).days
+        dias_atraso = (agora().date() - datetime.fromisoformat(r["vencimento"]).date()).days
         credor = f" — {r['credor']}" if r.get("credor") else ""
         lines.append(f"  🚨 #{r['id']} {r['descricao']}{credor}")
         lines.append(f"     R${r['valor']:,.2f} — {dias_atraso} dia{'s' if dias_atraso > 1 else ''} de atraso")
@@ -280,7 +281,7 @@ def _resumo_from_supabase(mes: str | None = None) -> str:
     """Gera resumo financeiro a partir do Supabase."""
     from cerebro.integrations.supabase_client import resumo_mes
     if mes is None:
-        mes = datetime.now().strftime("%Y-%m")
+        mes = agora().strftime("%Y-%m")
 
     dados = resumo_mes(mes=mes)
     if not dados:
