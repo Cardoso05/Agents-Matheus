@@ -39,6 +39,9 @@
         .btn-concluir:hover { background: #219a52; }
         .btn-excluir { background: #e74c3c; color: white; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
         .btn-excluir:hover { background: #c0392b; }
+        #btn-pause { border: none; padding: 4px 14px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold; transition: background 0.2s; }
+        #btn-pause.active { background: #27ae60; color: #fff; }
+        #btn-pause.paused { background: #e74c3c; color: #fff; }
         .form-inline { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: end; margin-bottom: 1.5rem; padding: 1rem; background: var(--pico-card-background-color); border-radius: 8px; border: 1px solid var(--pico-muted-border-color); }
         .form-inline label { font-size: 0.8rem; margin-bottom: 0; }
         .form-inline input, .form-inline select, .form-inline textarea { margin-bottom: 0; }
@@ -83,6 +86,7 @@
             <li><a href="/metricas">Métricas</a></li>
             <li><a href="/contexto">Contexto</a></li>
             <li><a href="/sistema">Sistema</a></li>
+            <li><button id="btn-pause" class="active" onclick="toggleAgente()">▶ Ativo</button></li>
         </ul>
     </nav>
     <main class="container">
@@ -92,5 +96,32 @@
         <small>Cérebro v0.2 — Central de Controle</small>
     </footer>
     <script src="/static/js/app.js"></script>
+    <script>
+      (function() {
+        const btn = document.getElementById('btn-pause');
+
+        function applyState(paused) {
+          if (paused) {
+            btn.textContent = '⏸ Pausado';
+            btn.className = 'paused';
+          } else {
+            btn.textContent = '▶ Ativo';
+            btn.className = 'active';
+          }
+        }
+
+        fetch('/api/agente/status')
+          .then(r => r.json())
+          .then(d => applyState(d.paused))
+          .catch(() => {});
+
+        window.toggleAgente = function() {
+          fetch('/api/agente/toggle', { method: 'POST' })
+            .then(r => r.json())
+            .then(d => applyState(d.paused))
+            .catch(() => {});
+        };
+      })();
+    </script>
 </body>
 </html>

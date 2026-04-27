@@ -98,6 +98,10 @@ def _is_authorized(user_id: int) -> bool:
 
 async def _processar_mensagem(texto: str, user_id: int | None = None) -> str:
     """Rota principal: classifica e executa com memória de conversa."""
+    from cerebro.core.state import is_paused
+    if is_paused():
+        return "⏸️ Agente pausado. Acesse o dashboard para retomar."
+
     from cerebro.db.conversas import sessao_ativa, registrar_mensagem as reg_msg
     from cerebro.db.metricas import registrar_metrica, medir_tempo
 
