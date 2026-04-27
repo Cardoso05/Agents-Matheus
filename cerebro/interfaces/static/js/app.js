@@ -311,6 +311,31 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    // ── Pause / Resume toggle ───────────────────────────────
+    var btnPause = document.getElementById('btn-pause');
+    if (btnPause) {
+        function applyPauseState(paused) {
+            if (paused) {
+                btnPause.textContent = '⏸ Pausado';
+                btnPause.className = 'paused';
+            } else {
+                btnPause.textContent = '▶ Ativo';
+                btnPause.className = 'active';
+            }
+        }
+
+        fetch('/api/agente/status')
+            .then(function (r) { return r.json(); })
+            .then(function (d) { applyPauseState(d.paused); })
+            .catch(function () {});
+
+        btnPause.addEventListener('click', function () {
+            apiCall('/api/agente/toggle', { method: 'POST' })
+                .then(function (d) { applyPauseState(d.paused); })
+                .catch(function () {});
+        });
+    }
+
     // ── Criar fato ──────────────────────────────────────────
     var formFato = document.getElementById('form-criar-fato');
     if (formFato) {
