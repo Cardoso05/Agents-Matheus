@@ -86,7 +86,7 @@
             <li><a href="/metricas">Métricas</a></li>
             <li><a href="/contexto">Contexto</a></li>
             <li><a href="/sistema">Sistema</a></li>
-            <li><button id="btn-pause" class="active" onclick="toggleAgente()">▶ Ativo</button></li>
+            <li><button id="btn-pause" class="active" data-pause-toggle>▶ Ativo</button></li>
         </ul>
     </nav>
     <main class="container">
@@ -96,32 +96,5 @@
         <small>Cérebro v0.2 — Central de Controle</small>
     </footer>
     <script src="/static/js/app.js"></script>
-    <script>
-      (function() {
-        const btn = document.getElementById('btn-pause');
-
-        function applyState(paused) {
-          if (paused) {
-            btn.textContent = '⏸ Pausado';
-            btn.className = 'paused';
-          } else {
-            btn.textContent = '▶ Ativo';
-            btn.className = 'active';
-          }
-        }
-
-        fetch('/api/agente/status')
-          .then(r => r.json())
-          .then(d => applyState(d.paused))
-          .catch(() => {});
-
-        window.toggleAgente = function() {
-          fetch('/api/agente/toggle', { method: 'POST' })
-            .then(r => r.json())
-            .then(d => applyState(d.paused))
-            .catch(() => {});
-        };
-      })();
-    </script>
 </body>
 </html>
