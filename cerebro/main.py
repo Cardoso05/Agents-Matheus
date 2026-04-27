@@ -74,6 +74,10 @@ DETERMINISTIC_FUNCS = {
 
 def processar_mensagem(mensagem: str, sessao_id: str | None = None) -> str:
     """Rota principal: classifica e executa."""
+    from cerebro.core.state import is_paused
+    if is_paused():
+        return "⏸️ Agente pausado. Acesse o dashboard para retomar."
+
     result = classificar(mensagem)
 
     if result["handler"] == "deterministic":

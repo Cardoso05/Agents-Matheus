@@ -457,6 +457,22 @@ def api_deletar_fato(id: int):
     return {"ok": True, "id": id}
 
 
+# ── Agente Pause/Resume API ─────────────────────────────────────
+
+
+@app.get("/api/agente/status")
+def api_agente_status():
+    from cerebro.core.state import is_paused
+    return {"paused": is_paused()}
+
+
+@app.post("/api/agente/toggle", dependencies=[Depends(_verify_api_key)])
+def api_agente_toggle():
+    from cerebro.core.state import toggle
+    paused = toggle()
+    return {"paused": paused}
+
+
 # ── Triggers API ───────────────────────────────────────────────
 
 
