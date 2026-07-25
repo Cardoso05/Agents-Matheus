@@ -529,6 +529,19 @@ def criar_scheduler() -> AsyncIOScheduler:
         day_of_week="sun", hour=20, id="review_semanal",
     )
 
+    # Meta Ads → WhatsApp (Gruta Máquinas)
+    from cerebro.meta_reports.jobs import enviar_meta_diario, enviar_meta_semanal
+    scheduler.add_job(
+        enviar_meta_diario, "cron",
+        hour=8, minute=30, id="meta_diario",
+        misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        enviar_meta_semanal, "cron",
+        day_of_week="mon", hour=8, minute=45, id="meta_semanal",
+        misfire_grace_time=3600,
+    )
+
     # Trigger engine (a cada 30 min)
     scheduler.add_job(
         avaliar_triggers, "interval",

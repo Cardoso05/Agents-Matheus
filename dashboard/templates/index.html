@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="refresh" content="300">
+<title>Cérebro — Painel Meta Ads</title>
+<style>
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: #0a0a0a; color: #e5e5e5;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px; line-height: 1.4;
+  -webkit-text-size-adjust: 100%;
+}
+.mono { font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; }
+.muted { color: #8a8a8a; }
+
+header {
+  padding: 16px 20px; border-bottom: 1px solid #1f1f1f;
+  display: flex; justify-content: space-between; align-items: baseline;
+  flex-wrap: wrap; gap: 8px;
+}
+header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+header .meta { font-size: 12px; color: #8a8a8a; }
+
+main { padding: 16px 20px; max-width: 1200px; margin: 0 auto; }
+
+.kpis {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(4, 1fr);
+  margin-bottom: 24px;
+}
+.kpi {
+  background: #131313; border: 1px solid #1f1f1f; border-radius: 8px;
+  padding: 14px 16px;
+}
+.kpi .label { font-size: 11px; color: #8a8a8a; text-transform: uppercase; letter-spacing: 0.05em; }
+.kpi .value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+.kpi .sub { font-size: 12px; margin-top: 4px; color: #8a8a8a; }
+.kpi .sub.good { color: #4ade80; }
+.kpi .sub.bad { color: #f87171; }
+
+section { margin-bottom: 28px; }
+section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: #a0a0a0; margin: 0 0 10px 0; font-weight: 600; }
+
+.card {
+  background: #131313; border: 1px solid #1f1f1f; border-radius: 8px;
+  overflow: hidden;
+}
+
+table.campaigns {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+table.campaigns th, table.campaigns td {
+  padding: 10px 12px; text-align: left;
+  border-bottom: 1px solid #1c1c1c;
+}
+table.campaigns th {
+  background: #0e0e0e; font-weight: 500; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.05em; color: #888;
+}
+table.campaigns tr:last-child td { border-bottom: none; }
+table.campaigns td.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.campaigns td.action { font-size: 12px; white-space: nowrap; }
+
+.cpr-good { color: #4ade80; }
+.cpr-ok { color: #facc15; }
+.cpr-warn { color: #fb923c; }
+.cpr-bad { color: #f87171; font-weight: 600; }
+.cpr-na { color: #555; }
+
+.freq-warn { color: #facc15; }
+.freq-bad { color: #f87171; font-weight: 600; }
+
+.var-down { color: #4ade80; }
+.var-up { color: #f87171; }
+
+.brand-row {
+  display: grid; grid-template-columns: 80px 1fr 100px;
+  align-items: center; gap: 12px; padding: 10px 16px;
+  border-bottom: 1px solid #1c1c1c;
+}
+.brand-row:last-child { border-bottom: none; }
+.brand-name { font-weight: 600; }
+.brand-bar { background: #1f1f1f; height: 8px; border-radius: 4px; overflow: hidden; }
+.brand-bar > div { background: linear-gradient(90deg, #3b82f6, #60a5fa); height: 100%; }
+.brand-meta { text-align: right; font-size: 12px; color: #a0a0a0; }
+.brand-meta .results { color: #e5e5e5; font-weight: 600; }
+
+.trend-grid {
+  display: grid; gap: 4px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+.trend-day {
+  padding: 8px 10px; background: #131313;
+  border: 1px solid #1f1f1f; border-radius: 6px;
+}
+.trend-day .date { font-size: 11px; color: #8a8a8a; }
+.trend-day .row { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.trend-day .cpr { font-weight: 600; font-variant-numeric: tabular-nums; }
+.trend-day .conv { font-size: 11px; color: #8a8a8a; }
+
+footer {
+  text-align: center; padding: 24px 0;
+  font-size: 11px; color: #555;
+}
+
+@media (max-width: 700px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  table.campaigns { font-size: 12px; }
+  table.campaigns th, table.campaigns td { padding: 8px; }
+  table.campaigns td.action { font-size: 11px; }
+  .brand-row { grid-template-columns: 60px 1fr 90px; }
+}
+@media (max-width: 480px) {
+  table.campaigns th.hide-sm, table.campaigns td.hide-sm { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 Cérebro — Painel Meta Ads</h1>
+  <div class="meta">
+    {% if last_date %}
+      Dados de <span class="mono">{{ last_date | short_date }}</span>
+      &middot; última atualização: <span class="mono">{{ now }}</span>
+    {% else %}
+      sem dados
+    {% endif %}
+  </div>
+</header>
+
+<main>
+
+{% if error %}
+  <p class="muted">{{ error }}</p>
+{% else %}
+
+<section class="kpis">
+  <div class="kpi">
+    <div class="label">Investido</div>
+    <div class="value mono">{{ summary.total_spend | br_money }}</div>
+    <div class="sub">{{ last_date | short_date }}</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Contatos</div>
+    <div class="value mono">{{ summary.total_results | br_int }}</div>
+    <div class="sub">via WhatsApp</div>
+  </div>
+  <div class="kpi">
+    <div class="label">CPR médio</div>
+    <div class="value mono {{ summary.avg_cpr | cpr_class }}">{{ summary.avg_cpr | br_money }}</div>
+    {% if cpr_var_account is not none %}
+      {% if cpr_var_account < 0 %}
+        <div class="sub good">📉 {{ cpr_var_account | pct }} vs ontem (melhor)</div>
+      {% elif cpr_var_account > 0 %}
+        <div class="sub bad">📈 {{ cpr_var_account | pct }} vs ontem (pior)</div>
+      {% else %}
+        <div class="sub">➡️ estável vs ontem</div>
+      {% endif %}
+    {% else %}
+      <div class="sub">—</div>
+    {% endif %}
+  </div>
+  <div class="kpi">
+    <div class="label">Saúde</div>
+    <div class="value">{{ summary.health or "—" }}</div>
+    <div class="sub">classificação automática</div>
+  </div>
+</section>
+
+<section>
+  <h2>Campanhas (ordenadas por CPR)</h2>
+  <div class="card">
+    <table class="campaigns">
+      <thead>
+        <tr>
+          <th>Campanha</th>
+          <th class="num">Result.</th>
+          <th class="num">Gasto</th>
+          <th class="num">CPR</th>
+          <th class="num hide-sm">vs D-1</th>
+          <th class="num hide-sm">Freq.</th>
+          <th>Ação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in campaigns %}
+        <tr>
+          <td>{{ c.campaign_name | short_name }}</td>
+          <td class="num mono">{{ c.results | br_int }}</td>
+          <td class="num mono">{{ c.spend | br_money }}</td>
+          <td class="num mono {{ c.cpr | cpr_class }}">{{ c.cpr | br_money }}</td>
+          <td class="num mono hide-sm">
+            {% if c.cpr_var is not none %}
+              {% if c.cpr_var < 0 %}
+                <span class="var-down">{{ c.cpr_var | pct }}</span>
+              {% elif c.cpr_var > 0 %}
+                <span class="var-up">{{ c.cpr_var | pct }}</span>
+              {% else %}
+                <span class="muted">0%</span>
+              {% endif %}
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td class="num mono hide-sm {{ c.frequency | freq_class }}">
+            {% if c.frequency %}{{ "%.2f" | format(c.frequency) | replace(".", ",") }}{% else %}—{% endif %}
+          </td>
+          <td class="action" title="{{ c.action_reason }}">
+            {{ c.action_emoji }} {{ c.action_label }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Distribuição por marca</h2>
+  <div class="card">
+    {% for b in breakdown %}
+    <div class="brand-row">
+      <div class="brand-name">{{ b.brand }}</div>
+      <div class="brand-bar"><div style="width: {{ '%.1f' | format(b.share) }}%;"></div></div>
+      <div class="brand-meta">
+        <div><span class="results">{{ b.results | br_int }}</span> contatos</div>
+        <div class="mono">{{ b.spend | br_money }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section>
+  <h2>Tendência últimos 14 dias</h2>
+  <div class="trend-grid">
+    {% for d in trend %}
+    <div class="trend-day">
+      <div class="date">{{ d.date | short_date }}</div>
+      <div class="row">
+        <span class="cpr mono {{ d.avg_cpr | cpr_class }}">{{ d.avg_cpr | br_money }}</span>
+        <span class="conv mono">{{ d.total_results | br_int }} conv</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+{% endif %}
+
+</main>
+
+<footer>
+  Cérebro Dashboard · auto-refresh 5min · readonly · <span class="mono">cerebro.db</span>
+</footer>
+
+</body>
+</html>

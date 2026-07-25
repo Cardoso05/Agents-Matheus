@@ -9,14 +9,27 @@ build/
 
 # Environment
 .env
+.env.*
+!.env.example
 .venv/
 venv/
 env/
+
+# Credenciais — NUNCA versionar
+credentials.json
+token.json
+*.pem
+*.key
 
 # Database
 *.db
 *.db-wal
 *.db-shm
+*.db.bak.*
+backups/
+
+# Logs de deploy
+deploy/deploys.log
 
 # IDE
 .vscode/

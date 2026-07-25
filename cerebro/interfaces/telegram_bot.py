@@ -218,6 +218,80 @@ async def cmd_semanal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _safe_reply(update.message, resumo_semanal())
 
 
+_META_HELP = (
+    "📊 *Comandos /meta*\n\n"
+    "• `/meta hoje` — relatório diário (D-1 vs D-2) e envia WhatsApp\n"
+    "• `/meta semana` — relatório semanal e envia WhatsApp\n"
+    "• `/meta preview` — gera diário, ecoa aqui SEM enviar WhatsApp\n"
+    "• `/meta resend` — reenvia o último que falhou"
+)
+
+
+async def cmd_meta(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler do /meta — subcomandos: hoje, semana, preview, resend."""
+    if not _is_authorized(update.effective_user.id):
+        return
+
+    args = context.args or []
+    sub = (args[0].lower() if args else "").strip()
+
+    import asyncio as _asyncio
+    from cerebro.meta_reports import jobs as meta_jobs
+    from cerebro.meta_reports.meta_client import MetaAuthError
+
+    if sub == "preview":
+        await update.message.reply_text("⏳ Gerando preview (sem enviar)…")
+        try:
+            texto, _ = await _asyncio.to_thread(meta_jobs.gerar_daily_text)
+        except MetaAuthError as e:
+            await _safe_reply(update.message, f"🔑 Token Meta expirou: {e}")
+            return
+        except Exception as e:
+            logger.exception("Erro no preview Meta")
+            await _safe_reply(update.message, f"⚠️ Falhou: {e}")
+            return
+        await _safe_reply(update.message, texto)
+        return
+
+    if sub == "hoje":
+        await update.message.reply_text("⏳ Gerando relatório diário…")
+        try:
+            texto, label = await _asyncio.to_thread(meta_jobs.gerar_daily_text)
+            report_id = await _asyncio.to_thread(meta_jobs.enviar, texto, "manual", label)
+        except MetaAuthError as e:
+            await _safe_reply(update.message, f"🔑 Token Meta expirou: {e}")
+            return
+        except Exception as e:
+            logger.exception("Erro no /meta hoje")
+            await _safe_reply(update.message, f"⚠️ Falhou: {e}")
+            return
+        await _safe_reply(update.message, texto + f"\n\n_(report #{report_id})_")
+        return
+
+    if sub == "semana":
+        await update.message.reply_text("⏳ Gerando relatório semanal…")
+        try:
+            texto, label = await _asyncio.to_thread(meta_jobs.gerar_weekly_text)
+            report_id = await _asyncio.to_thread(meta_jobs.enviar, texto, "manual", label)
+        except MetaAuthError as e:
+            await _safe_reply(update.message, f"🔑 Token Meta expirou: {e}")
+            return
+        except Exception as e:
+            logger.exception("Erro no /meta semana")
+            await _safe_reply(update.message, f"⚠️ Falhou: {e}")
+            return
+        await _safe_reply(update.message, texto + f"\n\n_(report #{report_id})_")
+        return
+
+    if sub == "resend":
+        ok, msg = await _asyncio.to_thread(meta_jobs.reenviar_ultimo_failed)
+        emoji = "✅" if ok else "⚠️"
+        await update.message.reply_text(f"{emoji} {msg}")
+        return
+
+    await _safe_reply(update.message, _META_HELP)
+
+
 async def cmd_triggers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler do /triggers — mostra status dos triggers condicionais."""
     if not _is_authorized(update.effective_user.id):
@@ -373,6 +447,7 @@ def create_app() -> Application:
     app.add_handler(CommandHandler("atrasadas", cmd_atrasadas))
     app.add_handler(CommandHandler("semanal", cmd_semanal))
     app.add_handler(CommandHandler("triggers", cmd_triggers))
+    app.add_handler(CommandHandler("meta", cmd_meta))
 
     # Mensagens de texto
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
